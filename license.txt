@@ -1,0 +1,28 @@
+【ライセンス表示】
+・本ソフトウェアは、以下に記載する部分を除きnaoki.kpが著作権を保持します。
+
+===============================================================================
+■本ソフトウェアでは、以下のソフトウェアライブラリを
+  Boost Software License 1.0に基づき使用しています。
+
+RapidXML Version 1.13
+  Copyright (C) 2006, 2009 Marcin Kalicinski
+  See accompanying file license.txt for license information.
+
+
+===============================================================================
+■本ソフトウェアでは、以下のソフトウェアライブラリを
+  Public Domain License に基づき使用しています。
+
+SQLite 3.7.13
+
+
+===============================================================================
+■本ソフトウェアのアイコン画像として Yusuke Kamiyamane. 様の
+  アイコンを使用しています。
+
+  Some icons by Yusuke Kamiyamane. All rights reserved.
+  Licensed under a Creative Commons Attribution 3.0 License.
+  URL: http://p.yusukekamiyamane.com/
+
+
