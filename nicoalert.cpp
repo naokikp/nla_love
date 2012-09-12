@@ -2,6 +2,7 @@
 //	Copyright (C) 2012 naoki.kp
 
 #include "nicoalert.h"
+#include "nicoalert_wnd.h"
 #include "nicoalert_db.h"
 #include "nicoalert_snd.h"
 
@@ -28,7 +29,7 @@ void _dbg(const TCHAR *fmt, ...){
 	OutputDebugString(buf);
 	va_list ap;
 	va_start(ap, fmt);
-	_vsntprintf_s(buf, sizeof(buf)-1, fmt, ap);
+	_vsntprintf_s(buf, ESIZEOF(buf)-1, fmt, ap);
 	OutputDebugString(buf);
 	va_end(ap);
 #endif
@@ -167,6 +168,15 @@ void SaveOptionInt(const TCHAR *key, unsigned int value){
     SaveOptionString(key, buf);
 }
 
+// オプションパラメータ削除
+void DeleteOption(const TCHAR *key){
+    setting_info.lock();
+    setting_info.erase(key);
+    setting_info_darty = true;
+    setting_info.unlock();
+}
+
+
 // アイコンリソース読み出し
 HICON LoadIconRsc(const TCHAR *res){
     return (HICON)LoadImage(hInst, res, IMAGE_ICON, 0, 0, LR_DEFAULTCOLOR | LR_SHARED);
@@ -183,6 +193,61 @@ unsigned int GetOSVer(void){
         winver = (osvi.dwMajorVersion << 8) + osvi.dwMinorVersion;
     }
     return winver;
+}
+
+// クリップボードにコピー
+bool CopyToClipBoard(const TCHAR *str){
+    unsigned int len = _tcslen(str);
+    if(len == 0) return true;
+
+    HGLOBAL hMemGA = NULL;
+    TCHAR *hMem = NULL;
+    unsigned int buflen = (len + 1) * sizeof(TCHAR);
+    bool success = false;
+
+    do {
+        // グローバルメモリ取得
+		hMemGA = GlobalAlloc(GMEM_MOVEABLE, buflen);
+        if(!hMemGA) break;
+        hMem = (TCHAR *)GlobalLock(hMemGA);
+        if(hMem == NULL) break;
+        memcpy(hMem, str, buflen);
+
+   		if(!OpenClipboard(NULL)) break;
+		if(!EmptyClipboard()) break;
+        if(SetClipboardData(NICOALERT_CLIPBOARD_FORMAT, hMemGA) == NULL) break;
+        hMemGA = hMem = NULL;
+		CloseClipboard();
+
+        success = true;
+    } while(0);
+
+    if(hMemGA){
+        if(hMem) GlobalUnlock(hMemGA);
+        GlobalFree(hMemGA);
+    }
+    return success;
+}
+
+// ウィンドウサブクラス化共通
+// エディットボックスフック
+bool WindowSubClass(HWND hWnd, FARPROC HookProc){
+    FARPROC Org_WndProc;
+    LONG ret;
+    // 現在のウィンドウプロシージャを取得し、GWL_USERDATA に保存
+    Org_WndProc = (FARPROC)GetWindowLongPtr(hWnd, GWL_WNDPROC);
+    if(Org_WndProc == NULL) return false;
+
+    SetLastError(0);
+    ret = SetWindowLongPtr(hWnd, GWL_USERDATA, (LONG_PTR)Org_WndProc);
+    if(ret == 0 && GetLastError() != 0) return false;
+
+    // フックプロシージャを設定
+    SetLastError(0);
+    ret = SetWindowLong(hWnd, GWL_WNDPROC, (LONG)HookProc);
+    if(ret == 0 && GetLastError() != 0) return false;
+
+    return true;
 }
 
 // メッセージループ

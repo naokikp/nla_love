@@ -6,7 +6,8 @@
 #define IDC_MSG                                 2001
 #define IDC_WRENCH                              2002
 #define IDC_BOOKMARK_PLUS                       2003
-#define IDC_LISTVIEW                            2004
+#define IDC_LABELSET                            2004
+#define IDC_LISTVIEW                            2005
 #define IDC_RA_INPUT                            3000
 #define IDC_RA_ANALYSE                          3001
 #define IDC_RA_REGIST                           3002
@@ -52,6 +53,11 @@
 #define IDC_SE_CANCEL                           5040
 #define IDC_SE_SAVE                             5041
 #define IDC_MI_MSG                              6000
+#define IDC_LS_LISTVIEW                         7000
+#define IDC_LS_LABELSET                         7001
+#define IDC_LS_LABELUNSET                       7002
+#define IDC_LS_LABELFILTER                      7003
+#define IDC_LS_CLEARFILTER                      7004
 #define IDM_ALLSEL                              40000
 #define IDM_SETTING                             40001
 #define IDM_REGADD                              40002
@@ -65,4 +71,6 @@
 #define IDM_OPEN_CH                             40010
 #define IDM_OPEN_USER                           40011
 #define IDM_OPEN_LV                             40012
-#define IDM_HELP                                40013
+#define IDM_OPEN_LV_CB                          40013
+#define IDM_HELP                                40014
+#define IDM_LABELSET                            40015

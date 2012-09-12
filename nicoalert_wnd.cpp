@@ -2,28 +2,33 @@
 //	Copyright (C) 2012 naoki.kp
 
 #include "nicoalert.h"
+#include "nicoalert_wnd.h"
 #include "nicoalert_db.h"
 #include "nicoalert_cmm.h"
 #include "nicoalert_bcc.h"
 #include "nicoalert_name.h"
 #include "nicoalert_ole.h"
+#include "nicoalert_label.h"
 
 static HWND hDlg;
 static HWND hWndListView;
 static HACCEL hAccel = NULL;
 static HHOOK HHook;
 static FARPROC Org_WndProc_Listview;
-static FARPROC Org_WndProc_Icon;
 
 static class nicoalert_db nadb;
-
 static void msginfo_ind(const TCHAR *msg);
 
-// ツールチップ用管理データ
-struct ToolTipInfo {
-    UINT uDlgItem;
-    TCHAR *msg;
-};
+// リストビュー描画ロック
+static inline void LV_Lock(HWND hWndListView){
+    SendMessage(hWndListView, WM_SETREDRAW, (WPARAM)FALSE, NULL);
+    LockWindowUpdate(hWndListView);
+}
+// リストビュー描画ロック解除
+static inline void LV_UnLock(HWND hWndListView){
+    LockWindowUpdate(NULL);
+    SendMessage(hWndListView, WM_SETREDRAW, (WPARAM)TRUE, NULL);
+}
 
 // リストビュー用カラムデータ
 static const struct COLUMN{
@@ -40,6 +45,7 @@ static const struct COLUMN{
     {30,  LVCFMT_CENTER|LVCFMT_IMAGE,   _T("2")},
     {30,  LVCFMT_CENTER|LVCFMT_IMAGE,   _T("3")},
     {100, LVCFMT_LEFT,                  _T("メモ")},
+    {100, LVCFMT_LEFT,                  _T("ラベル")},
 };
 
 // リストビューにカラム追加
@@ -88,15 +94,15 @@ static void UpdateListView(HWND hWndListView, unsigned int lvidx, c_regdata *rd)
     item.pszText = szStringBuffer;
     item.iSubItem = 1;
 
-    /* key_name */
+    // key_name
     _stprintf_s(szStringBuffer, _T("%s"), rd->key_name.c_str());
     ListView_SetItem(hWndListView, &item); item.iSubItem++;
 
-    /* key */
+    // key
     _stprintf_s(szStringBuffer, _T("%s"), rd->key.c_str());
     ListView_SetItem(hWndListView, &item); item.iSubItem++;
 
-    /* last_start */
+    // last_start
     TCHAR timebuf[24];
     if(rd->last_start){
         timefmt(timebuf, ESIZEOF(timebuf), rd->last_start);
@@ -106,9 +112,19 @@ static void UpdateListView(HWND hWndListView, unsigned int lvidx, c_regdata *rd)
     }
     ListView_SetItem(hWndListView, &item); item.iSubItem++;
 
-    item.iSubItem += 4;
-    /* memo */
+    // notify *4
+    szStringBuffer[0] = '\0';
+    ListView_SetItem(hWndListView, &item); item.iSubItem++;
+    ListView_SetItem(hWndListView, &item); item.iSubItem++;
+    ListView_SetItem(hWndListView, &item); item.iSubItem++;
+    ListView_SetItem(hWndListView, &item); item.iSubItem++;
+
+    // memo
     _stprintf_s(szStringBuffer, _T("%s"), rd->memo.c_str());
+    ListView_SetItem(hWndListView, &item); item.iSubItem++;
+
+    // label
+    item.pszText = LPSTR_TEXTCALLBACK;
     ListView_SetItem(hWndListView, &item); item.iSubItem++;
 }
 
@@ -128,22 +144,21 @@ static void UpdateListViewAll(HWND hWndListView){
     //DWORD dwStyle = GetWindowLong(hWndListView, GWL_STYLE);
     //SetWindowLong(hWndListView, GWL_STYLE, dwStyle | LVS_NOSCROLL);
 
-    LockWindowUpdate(hWndListView);
+    LV_Lock(hWndListView);
     ListView_DeleteAllItems(hWndListView);
-    
+
     unsigned int num = 0;
 
     regdata_info.lock();
     FOREACH(it, regdata_info){
         c_regdata *rd = &(it->second);
-            
+
         item.iItem = num;
         item.pszText = NULL;
         item.iSubItem = 0;
         item.lParam = rd->idx;
 
-        item.mask = LVIF_PARAM | LVIF_IMAGE;
-        item.iImage = -1;
+        item.mask = LVIF_PARAM;
         ListView_InsertItem(hWndListView, &item); item.iSubItem++;
         ListView_SetCheckState(hWndListView, num, (rd->notify & NOTIFY_ENABLE)?TRUE:FALSE);
 
@@ -152,16 +167,19 @@ static void UpdateListViewAll(HWND hWndListView){
     }
     regdata_info.unlock();
 
-    // カラムの自動調整
-    // TODO: 幅も保存できるように・・・。そのうち。
+    // カラム幅をオプションから復旧
     int itemcount = Header_GetItemCount(ListView_GetHeader(hWndListView));
     for(int i = 0; i < itemcount; i++){
         if(!(header[i].format & LVCFMT_IMAGE)){
-            ListView_SetColumnWidth(hWndListView, i, LVSCW_AUTOSIZE_USEHEADER);
+            TCHAR szHeaderWidthKey[64];
+            _stprintf_s(szHeaderWidthKey, OPTION_HEADER_WIDTH_FORMAT, i);
+            int width = ReadOptionInt(szHeaderWidthKey, -1);
+            if(width < 0) width = LVSCW_AUTOSIZE_USEHEADER;
+            ListView_SetColumnWidth(hWndListView, i, width);
         }
     }
 
-    LockWindowUpdate(NULL);
+    LV_UnLock(hWndListView);
     ListView_Scroll(hWndListView, 0, 0);
 }
 
@@ -169,31 +187,30 @@ static void UpdateListViewAll(HWND hWndListView){
 static void InsertListViewAdd(HWND hWndListView, unsigned int mindbidx){
     LV_ITEM item;
 
-    LockWindowUpdate(hWndListView);
-    
     unsigned int num = ListView_GetItemCount(hWndListView);
 
+    LV_Lock(hWndListView);
     regdata_info.lock();
+
     FOREACH(it, regdata_info){
         c_regdata *rd = &(it->second);
         if(rd->idx < mindbidx) continue;
-            
+
         item.iItem = num;
         item.pszText = NULL;
         item.iSubItem = 0;
         item.lParam = rd->idx;
 
-        item.mask = LVIF_PARAM | LVIF_IMAGE;
-        item.iImage = -1;
+        item.mask = LVIF_PARAM;
         ListView_InsertItem(hWndListView, &item); item.iSubItem++;
         ListView_SetCheckState(hWndListView, num, (rd->notify & NOTIFY_ENABLE)?TRUE:FALSE);
 
         UpdateListView(hWndListView, num, rd);
         num++;
     }
-    regdata_info.unlock();
 
-    LockWindowUpdate(NULL);
+    regdata_info.unlock();
+    LV_UnLock(hWndListView);
 }
 
 
@@ -230,14 +247,58 @@ static bool LoadDatabase(){
     if(!nadb.loadsetting(setting_info)){
         return false;
     }
+
+    // スキーマバージョンチェック
+    // TODO: 新バージョンでの新規作成
+    int dbver = ReadOptionInt(OPTION_DATABASE_VERSION, OPTION_DATABASE_VERSION_DEF);
+
+    // 登録情報テーブルが存在しない場合、最新版とする。
+    if(!nadb.istableexistregdata()){
+        dbver = OPTION_DATABASE_VERSION_NEW;
+        SaveOptionInt(OPTION_DATABASE_VERSION, dbver);
+    }
+    if(dbver != OPTION_DATABASE_VERSION_NEW){
+        if(MessageBox(hDlg, _T("古いデータベースを検出したため、自動的にバージョンアップします。nicoalert.dbファイルのバックアップを取っておくことを推奨します。\nOKボタンを押すと継続します。"), PROGRAM_NAME, MB_OKCANCEL | MB_ICONASTERISK) != IDOK){
+            return false;
+        }
+
+        // バージョンアップトランザクション開始
+        if(!nadb.tr_begin()) return false;
+
+        bool success = false;
+        do {
+            // 旧バージョンDBスキーマをバージョンアップ
+            if(!nadb.verupregdata(dbver, OPTION_DATABASE_VERSION_NEW)){
+                // 変更失敗
+                break;
+            }
+            // バージョンアップ成功したら即座にバージョン値を書き込み
+            SaveOptionInt(OPTION_DATABASE_VERSION, OPTION_DATABASE_VERSION_NEW);
+            if(!nadb.savesetting(setting_info)){
+                // バージョン値書き込み失敗
+                break;
+            }
+            success = true;
+        } while(0);
+        if(!success){
+            nadb.tr_rollback();
+            return false;
+        }
+        nadb.tr_commit();
+        nadb.cleanup();
+        // バージョンアップトランザクション終了
+    }
+
     if(!nadb.loadregdata(regdata_info)){
         return false;
     }
 
     // キー番号からdbidxへのハッシュ生成
+    regdata_info.lock(); regdata_hash.lock();
     FOREACH(it, regdata_info){
         regdata_hash[it->second.key] = it->first;
     }
+    regdata_hash.unlock(); regdata_info.unlock();
 
     return true;
 }
@@ -247,11 +308,12 @@ static bool CloseDataBase(){
     setting_info.clear();
     regdata_info.clear();
     regdata_hash.clear();
+    nadb.cleanup();
     return nadb.close();
 }
 
 // ツールチップウィンドウ初期化
-static HWND ToolTipInit(HWND hDlgWnd, HINSTANCE hInstance, const ToolTipInfo *tti, int num){
+HWND ToolTipInit(HWND hDlgWnd, HINSTANCE hInstance, const ToolTipInfo *tti, int num){
     // ツールチップウィンドウ生成
     HWND hToolTip = CreateWindowEx(
         0, TOOLTIPS_CLASS, NULL, 0,
@@ -416,6 +478,7 @@ static unsigned int Registration(TCHAR *buf){
         MessageBox(hDlg, _T("データベースの制御に失敗しました。"), PROGRAM_NAME, MB_OK | MB_ICONERROR);
         return 0;
     }
+    regdata_info.lock(); regdata_hash.lock();
 
     // トークン分解してDBへ登録、登録成功数/失敗数/重複数をカウント
     p = _tcstok_s(buf, _T(" \r\n"), &context);
@@ -430,22 +493,24 @@ static unsigned int Registration(TCHAR *buf){
             unsigned long idnum = _tcstoul(p + prefixlen, NULL, 10);
 
             if(idnum != ULONG_MAX || errno != ERANGE){
-                _stprintf_s(tbuf, _T("%s%lu"), checkstr[i], idnum);
                 c_regdata rd;
+                memset(&rd, 0, sizeof(rd));
+
+                _stprintf_s(tbuf, _T("%s%lu"), checkstr[i], idnum);
                 rd.key = tbuf;
                 if(nadb.newregdata(rd)){
                     rd.last_start = 0;
                     rd.notify = ReadOptionInt(OPTION_DEFAULT_NOTIFY, DEF_OPTION_DEFAULT_NOTIFY) | NOTIFY_ENABLE;
+                    rd.label = 0;
+
                     if(!nadb.updateregdata(rd)){
                         cnt_fail++;
                         break;
                     }
                     if(mindbidx == 0) mindbidx = rd.idx;
 
-                    regdata_info.lock(); regdata_hash.lock();
                     regdata_info[rd.idx] = rd;
                     regdata_hash[rd.key] = rd.idx;
-                    regdata_hash.unlock(); regdata_info.unlock();
 
                     _dbg(_T("add: idx = %u, key = %s\n"), rd.idx, rd.key.c_str());
                     cnt_sucess++;
@@ -456,6 +521,8 @@ static unsigned int Registration(TCHAR *buf){
             }
         }
     } while((p = _tcstok_s(NULL, _T(" \r\n"), &context)) != NULL);
+
+    regdata_hash.unlock(); regdata_info.unlock();
 
     // トランザクション終了
     if(!nadb.tr_commit()){
@@ -517,13 +584,7 @@ static LRESULT CALLBACK EditHookProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp){
 
 // エディットボックスフック
 static void SetEditBoxHook(HWND hWnd){
-    FARPROC Org_WndProc;
-    // 現在のウィンドウプロシージャを取得し、GWL_USERDATA に保存
-    Org_WndProc = (FARPROC)GetWindowLong(hWnd, GWL_WNDPROC);
-    SetWindowLong(hWnd, GWL_USERDATA, (LONG)Org_WndProc);
-
-    // フックプロシージャを設定
-    SetWindowLong(hWnd, GWL_WNDPROC, (LONG)EditHookProc);
+    WindowSubClass(hWnd, (FARPROC)EditHookProc);
 }
 
 // 登録追加ダイアログ
@@ -691,34 +752,39 @@ static BOOL CALLBACK RegSetDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp)
                 // 1個だけの場合変更ボタンを無効化し、変わりに取得ボタンを有効化
                 // ただし、ユーザIDの場合は取得できないので、無効化のまま。
                 _stprintf_s(buf, _T(""));
+
+                regdata_info.lock();
                 ITER(regdata_info) it = regdata_info.find(p_idx->front());
-                if(it == regdata_info.end()) break;
-                c_regdata *rd = &(it->second);
+                if(it != regdata_info.end()){
+                    c_regdata *rd = &(it->second);
 
-                SetDlgItemText(hDlgWnd, IDC_RS_EDIT_KEY,     rd->key.c_str());
-                SetDlgItemText(hDlgWnd, IDC_RS_EDIT_KEYNAME, rd->key_name.c_str());
-                SetDlgItemText(hDlgWnd, IDC_RS_EDIT_MEMO,    rd->memo.c_str());
+                    SetDlgItemText(hDlgWnd, IDC_RS_EDIT_KEY,     rd->key.c_str());
+                    SetDlgItemText(hDlgWnd, IDC_RS_EDIT_KEYNAME, rd->key_name.c_str());
+                    SetDlgItemText(hDlgWnd, IDC_RS_EDIT_MEMO,    rd->memo.c_str());
 
-                if(rd->key.substr(0,USERID_PREFIX_LEN) != _T(USERID_PREFIX)){
-                    ShowWindow(GetDlgItem(hDlgWnd, IDC_RS_CB_KEYNAME), SW_HIDE);
-                } else {
-                    ShowWindow(GetDlgItem(hDlgWnd, IDC_RS_KEYNAME_ACQ), SW_HIDE);
-                    EnableWindow(GetDlgItem(hDlgWnd, IDC_RS_CB_KEYNAME), FALSE);
-                }
-                EnableWindow(GetDlgItem(hDlgWnd, IDC_RS_CB_MEMO),    FALSE);
+                    if(rd->key.substr(0,USERID_PREFIX_LEN) != _T(USERID_PREFIX)){
+                        ShowWindow(GetDlgItem(hDlgWnd, IDC_RS_CB_KEYNAME), SW_HIDE);
+                    } else {
+                        ShowWindow(GetDlgItem(hDlgWnd, IDC_RS_KEYNAME_ACQ), SW_HIDE);
+                        EnableWindow(GetDlgItem(hDlgWnd, IDC_RS_CB_KEYNAME), FALSE);
+                    }
+                    EnableWindow(GetDlgItem(hDlgWnd, IDC_RS_CB_MEMO),    FALSE);
 
-                if(rd->notify & NOTIFY_BALLOON){
-                    CheckDlgButton(hDlgWnd, IDC_RS_CHECK_BALLOON,   TRUE);
+                    if(rd->notify & NOTIFY_BALLOON){
+                        CheckDlgButton(hDlgWnd, IDC_RS_CHECK_BALLOON,   TRUE);
+                    }
+                    if(rd->notify & NOTIFY_BROWSER){
+                        CheckDlgButton(hDlgWnd, IDC_RS_CHECK_BROWSER,   TRUE);
+                    }
+                    if(rd->notify & NOTIFY_SOUND){
+                        CheckDlgButton(hDlgWnd, IDC_RS_CHECK_SOUND,     TRUE);
+                    }
+                    if(rd->notify & NOTIFY_EXTAPP){
+                        CheckDlgButton(hDlgWnd, IDC_RS_CHECK_EXTAPP,    TRUE);
+                    }
                 }
-                if(rd->notify & NOTIFY_BROWSER){
-                    CheckDlgButton(hDlgWnd, IDC_RS_CHECK_BROWSER,   TRUE);
-                }
-                if(rd->notify & NOTIFY_SOUND){
-                    CheckDlgButton(hDlgWnd, IDC_RS_CHECK_SOUND,     TRUE);
-                }
-                if(rd->notify & NOTIFY_EXTAPP){
-                    CheckDlgButton(hDlgWnd, IDC_RS_CHECK_EXTAPP,    TRUE);
-                }
+                regdata_info.unlock();
+
             } else {
                 // 複数選択の場合、入力ボックスをデフォルト無効化し、
                 // 変更ボタン押下により入力可能とする。
@@ -735,6 +801,7 @@ static BOOL CALLBACK RegSetDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp)
             // 通知チェックボックスの現状態の反映(共通)
             int ntf[4];
             for(int i = 0; i < ESIZEOF(ntf); i++){ ntf[i] = 0; }
+            regdata_info.lock();
             FOREACH(it, *p_idx){
                 unsigned int dbidx = *it;
                 ITER(regdata_info) dbit = regdata_info.find(dbidx);
@@ -746,6 +813,8 @@ static BOOL CALLBACK RegSetDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp)
                 ntf[2] |= (notify & NOTIFY_SOUND  ) ? 2 : 1;
                 ntf[3] |= (notify & NOTIFY_EXTAPP ) ? 2 : 1;
             }
+            regdata_info.unlock();
+
             SetDlgCheckbox(hDlgWnd, IDC_RS_CHECK_BALLOON, ntf[0]);
             SetDlgCheckbox(hDlgWnd, IDC_RS_CHECK_BROWSER, ntf[1]);
             SetDlgCheckbox(hDlgWnd, IDC_RS_CHECK_SOUND,   ntf[2]);
@@ -866,6 +935,7 @@ static BOOL CALLBACK RegSetDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp)
                 }
 
                 // メモリ上のデータに変更を反映(DBへの反映はメイン側)
+                regdata_info.lock();
                 FOREACH(it, *p_idx){
                     unsigned int dbidx = *it;
                     ITER(regdata_info) dbit = regdata_info.find(dbidx);
@@ -874,6 +944,7 @@ static BOOL CALLBACK RegSetDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp)
                     if(bBtnMemo)    dbit->second.memo     = strMemo;
                     dbit->second.notify   = dbit->second.notify & notify_and | notify_or;
                 }
+                regdata_info.unlock();
 
                 // 変更ありを通知してダイアログ終了
                 EndDialog(hDlgWnd, TRUE);
@@ -1280,6 +1351,8 @@ static int CALLBACK fnCompare_(LPARAM idx1, LPARAM idx2, LPARAM col){
             ret = cr1->memo.compare(cr2->memo); break;
         case COLINDEX_LASTSTART:
             ret = cr2->last_start - cr1->last_start; break;
+        case COLINDEX_LABEL:
+            ret = cr1->label - cr2->label; break;
         }
     }
 
@@ -1327,26 +1400,26 @@ static LRESULT CALLBACK ListViewHookProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPAR
         SendMessage(hDlg, WM_COMMAND, MAKEWPARAM(IDC_LISTVIEW, 0xffff), lp);
         return 0;
 
-#ifndef _DEBUG
-    // アイコンのみのカラムに対して幅調整を制限(リリース版のみ)
+//#ifndef _DEBUG
     case WM_NOTIFY:
         {
+            // アイコンのみのカラムに対して幅調整を制限(リリース版のみ)
             HD_NOTIFY *phdn = (HD_NOTIFY *)lp;
             switch(phdn->hdr.code)
             {
-            case HDN_BEGINTRACKA:
-            case HDN_BEGINTRACKW:
-            case HDN_DIVIDERDBLCLICKA:
-            case HDN_DIVIDERDBLCLICKW:
+            case HDN_ITEMCHANGING:
+            case HDN_BEGINTRACK:
+            case HDN_DIVIDERDBLCLICK:
                 if(phdn->iItem == COLINDEX_ENABLE ||
                     (phdn->iItem >= COLINDEX_BALLOON && phdn->iItem <= COLINDEX_EXTAPP))
+                {
                     return TRUE;
+                }
                 break;
             }
         }
         break;
-#endif
-
+//#endif
     }
 
     return CallWindowProc((WNDPROC)Org_WndProc_Listview, hDlgWnd, msg, wp, lp);
@@ -1397,7 +1470,7 @@ static LRESULT CALLBACK IconHookProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp){
             POINT pt = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
             _dbg(_T("DragDetect() start\n"));
             if(! DragDetect(hWnd, pt)){
-                SendMessage(GetParent(hWnd), WM_COMMAND, MAKEWPARAM(GetDlgCtrlID(hWnd), STN_CLICKED), 0);
+                PostMessage(GetParent(hWnd), WM_COMMAND, MAKEWPARAM(GetDlgCtrlID(hWnd), STN_CLICKED), 0);
             }
             _dbg(_T("DragDetect() end\n"));
         }
@@ -1418,14 +1491,16 @@ static LRESULT CALLBACK IconHookProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp){
 
     }
 
-    return CallWindowProc((WNDPROC)Org_WndProc_Icon, hWnd, msg, wp, lp);
+    FARPROC OrgWndProc = (FARPROC)GetWindowLong(hWnd, GWL_USERDATA);
+    return CallWindowProc((WNDPROC)OrgWndProc, hWnd, msg, wp, lp);
 }
 
 // アイコンボタンのサブクラス化設定
 static void IconHookInit(HWND hDlgWnd){
-    Org_WndProc_Icon = (FARPROC)SetWindowLong(GetDlgItem(hDlgWnd, IDC_MSGINFO_ICON),  GWL_WNDPROC, (LONG)IconHookProc);
-    (FARPROC)SetWindowLong(GetDlgItem(hDlgWnd, IDC_BOOKMARK_PLUS), GWL_WNDPROC, (LONG)IconHookProc);
-    (FARPROC)SetWindowLong(GetDlgItem(hDlgWnd, IDC_WRENCH),        GWL_WNDPROC, (LONG)IconHookProc);
+    WindowSubClass(GetDlgItem(hDlgWnd, IDC_MSGINFO_ICON),   (FARPROC)IconHookProc);
+    WindowSubClass(GetDlgItem(hDlgWnd, IDC_WRENCH),         (FARPROC)IconHookProc);
+    WindowSubClass(GetDlgItem(hDlgWnd, IDC_BOOKMARK_PLUS),  (FARPROC)IconHookProc);
+    WindowSubClass(GetDlgItem(hDlgWnd, IDC_LABELSET),       (FARPROC)IconHookProc);
 }
 
 
@@ -1463,7 +1538,7 @@ static void msginfo_ind(const TCHAR *msg){
 }
 
 // ログ表示ウィンドウ
-BOOL CALLBACK MsgInfoProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
+static BOOL CALLBACK MsgInfoProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
     switch(msg) {
     case WM_INITDIALOG:
         SetWindowPos(hDlgWnd, NULL, 0, 0, 640, 240, SWP_NOZORDER | SWP_NOMOVE);
@@ -1521,9 +1596,9 @@ BOOL CALLBACK MsgInfoProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
 }
 
 
-// 登録データ変更通知(コールバック / IN: dbidx)
-static void alertinfo_ntf(unsigned int dbidx){
-    PostMessage(hDlg, WM_ALINFO_NOTIFY, dbidx, TRUE);
+// 登録データ変更通知(コールバック / IN: dbidx, fUpdate)
+static void alertinfo_ntf(unsigned int dbidx, BOOL fUpdate){
+    PostMessage(hDlg, WM_ALINFO_NOTIFY, dbidx, fUpdate);
 }
 
 // タスクトレイアイコン制御変数
@@ -1668,7 +1743,9 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
     static int iSortedIdx = 0;
     static bool initializing = false;
     static HWND hToolTipWnd = NULL;
+    static HWND hWndLvHdr = NULL;
 	static IDropTarget *pDropTarget = NULL;
+    static tstring sLabelName[NICOALERT_LABEL_MAX];
 
     static unsigned int start_bc_color_tx = 0;
     static unsigned int start_bc_color_bg = 0;
@@ -1736,10 +1813,14 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
             }
             iSortedIdx = ReadOptionInt(OPTION_SORT_INDEX, DEF_OPTION_SORT_INDEX);
 
+            // ラベル名読み出し
+            SendMessage(hDlgWnd, WM_LABELRELOAD, 0, 0);
+
             // リストビュー構築
             hWndListView = GetDlgItem(hDlgWnd, IDC_LISTVIEW);
             InsertColumn(hWndListView);
             UpdateListViewAll(hWndListView);
+            hWndLvHdr = ListView_GetHeader(hWndListView);
 
             // リストビューソートの反映
             PostMessage(hDlgWnd, WM_ALINFO_NOTIFY, 0, TRUE);
@@ -1751,14 +1832,16 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                     SetTimer(hDlgWnd, TID_MINIMIZE, 0, NULL);
                 }
             } else {
-                ShowWindow(hDlgWnd, SW_SHOWNORMAL);
+                //InvalidateRect(hDlgWnd, NULL, TRUE);
+                //UpdateWindow(hDlgWnd);
+                //ShowWindow(hDlgWnd, SW_SHOWNORMAL);
             }
 
-            /* キーボードフック */
+            // キーボードフック
             hAccel = LoadAccelerators(hInst, _T("IDR_ACCELERATOR"));
             HHook = SetWindowsHookEx(WH_GETMESSAGE, (HOOKPROC)HookProc, NULL, GetWindowThreadProcessId(hDlgWnd, NULL));
 
-            /* リストビュー メッセージフック */ 
+            // リストビュー メッセージフック(必須:カラム幅決定後)
             Org_WndProc_Listview = (FARPROC)SetWindowLong(hWndListView, GWL_WNDPROC, (long)ListViewHookProc);
 
             // アイコンボタン メッセージフック
@@ -1774,6 +1857,7 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                     //{ IDC_MSG,              _T("-") },
                     { IDC_WRENCH,           _T("全体設定") },
                     { IDC_BOOKMARK_PLUS,    _T("アイテム登録追加") },
+                    { IDC_LABELSET,         _T("ラベル管理") },
                 };
                 hToolTipWnd = ToolTipInit(hDlgWnd, hInst, uMainDlgIds, ESIZEOF(uMainDlgIds));
                 
@@ -1855,13 +1939,15 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                     item.state = 0;
                     item.stateMask = -1;
                     if(!ListView_GetItem(hWndListView, &item)) break;
-                    if(item.state & LVIS_SELECTED) break;
 
-                    int loc = -1;
-                    while(1){
-                        loc = ListView_GetNextItem(hWndListView, loc, LVNI_ALL | LVNI_SELECTED);
-                        if(loc < 0) break;
-                        ListView_SetItemState(hWndListView, loc, 0, LVIS_SELECTED);
+                    if(!(item.state & LVIS_SELECTED)){
+                        // 選択行をすべて解除
+                        int lvidx = -1;
+                        while(1){
+                            lvidx = ListView_GetNextItem(hWndListView, lvidx, LVNI_ALL | LVNI_SELECTED);
+                            if(lvidx < 0) break;
+                            ListView_SetItemState(hWndListView, lvidx, 0, LVIS_SELECTED);
+                        }
                     }
                     ListView_SetItemState(hWndListView, lvidx, LVIS_SELECTED, LVIS_SELECTED);
 
@@ -1871,12 +1957,14 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                 hSubmenu = GetSubMenu(hmenu, 0);
 
                 // Vista以上のみ、トラックメニューにアイコン追加
-                HBITMAP hBmp1 = NULL, hBmp2 = NULL;
+                HBITMAP hBmp1 = NULL, hBmp2 = NULL, hBmp3 = NULL;
                 if(GetOSVer() >= _WIN32_WINNT_VISTA){
                     hBmp1 = CreateBmpFronIcon(hInst, _T("IDI_WRENCH"));
                     SetMenuItemBitmaps(hSubmenu, IDM_SETTING, MF_BYCOMMAND, hBmp1, hBmp1);
                     hBmp2 = CreateBmpFronIcon(hInst, _T("IDI_BOOKMARK_PLUS"));
                     SetMenuItemBitmaps(hSubmenu, IDM_REGADD, MF_BYCOMMAND, hBmp2, hBmp2);
+                    hBmp3 = CreateBmpFronIcon(hInst, _T("IDI_LABEL"));
+                    SetMenuItemBitmaps(hSubmenu, IDM_LABELSET, MF_BYCOMMAND, hBmp3, hBmp3);
                 }
 
                 if(ListView_GetSelectedCount(hWndListView) == 1){
@@ -1886,22 +1974,28 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                         if(lvidx < 0) break;
                         unsigned int dbidx = lvidx2dbidx(hWndListView, lvidx);
                         if(dbidx == 0) break;
-                        ITER(regdata_info) it = regdata_info.find(dbidx);
-                        if(it == regdata_info.end()) break;
-                        tstring &key = it->second.key;
 
-                        if(key.compare(0, COID_PREFIX_LEN, _T(COID_PREFIX))){
-                            DeleteMenu(hSubmenu, IDM_OPEN_CO, MF_BYCOMMAND);
+                        regdata_info.lock();
+                        ITER(regdata_info) it = regdata_info.find(dbidx);
+                        if(it != regdata_info.end()){
+                            tstring &key = it->second.key;
+                            tstring &last_lv = it->second.last_lv;
+
+                            if(key.compare(0, COID_PREFIX_LEN, _T(COID_PREFIX))){
+                                DeleteMenu(hSubmenu, IDM_OPEN_CO, MF_BYCOMMAND);
+                            }
+                            if(key.compare(0, CHID_PREFIX_LEN, _T(CHID_PREFIX))){
+                                DeleteMenu(hSubmenu, IDM_OPEN_CH, MF_BYCOMMAND);
+                            }
+                            if(key.compare(0, USERID_PREFIX_LEN, _T(USERID_PREFIX))){
+                                DeleteMenu(hSubmenu, IDM_OPEN_USER, MF_BYCOMMAND);
+                            }
+                            if(key.compare(0, LVID_PREFIX_LEN, _T(LVID_PREFIX)) && (last_lv == _T(""))){
+                                DeleteMenu(hSubmenu, IDM_OPEN_LV, MF_BYCOMMAND);
+                                DeleteMenu(hSubmenu, IDM_OPEN_LV_CB, MF_BYCOMMAND);
+                            }
                         }
-                        if(key.compare(0, CHID_PREFIX_LEN, _T(CHID_PREFIX))){
-                            DeleteMenu(hSubmenu, IDM_OPEN_CH, MF_BYCOMMAND);
-                        }
-                        if(key.compare(0, USERID_PREFIX_LEN, _T(USERID_PREFIX))){
-                            DeleteMenu(hSubmenu, IDM_OPEN_USER, MF_BYCOMMAND);
-                        }
-                        if(key.compare(0, LVID_PREFIX_LEN, _T(LVID_PREFIX)) && (it->second.last_lv == _T(""))){
-                            DeleteMenu(hSubmenu, IDM_OPEN_LV, MF_BYCOMMAND);
-                        }
+                        regdata_info.unlock();
                     } while(0);
                 } else {
                     // 複数選択の場合、各ページを開くメニューを削除
@@ -1909,6 +2003,7 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                     DeleteMenu(hSubmenu, IDM_OPEN_CH, MF_BYCOMMAND);
                     DeleteMenu(hSubmenu, IDM_OPEN_USER, MF_BYCOMMAND);
                     DeleteMenu(hSubmenu, IDM_OPEN_LV, MF_BYCOMMAND);
+                    DeleteMenu(hSubmenu, IDM_OPEN_LV_CB, MF_BYCOMMAND);
                 }
 
                 // リストビュー右クリック トラックメニュー表示
@@ -1918,6 +2013,7 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
 
                 if(hBmp1) DeleteObject(hBmp1);
                 if(hBmp2) DeleteObject(hBmp2);
+                if(hBmp3) DeleteObject(hBmp3);
             }
             break;
 
@@ -1929,12 +2025,6 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                 }
             }
             break;
-        case IDC_BOOKMARK_PLUS:
-            if(HIWORD(wp) == STN_CLICKED){
-                // 登録追加アイコン押下
-                PostMessage(hDlgWnd, WM_COMMAND, IDM_REGADD, 0);
-            }
-            break;
 
         case IDC_WRENCH:
             if(HIWORD(wp) == STN_CLICKED){
@@ -1942,6 +2032,21 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                 PostMessage(hDlgWnd, WM_COMMAND, IDM_SETTING, 0);
             }
             break;
+
+        case IDC_BOOKMARK_PLUS:
+            if(HIWORD(wp) == STN_CLICKED){
+                // 登録追加アイコン押下
+                PostMessage(hDlgWnd, WM_COMMAND, IDM_REGADD, 0);
+            }
+            break;
+
+        case IDC_LABELSET:
+            if(HIWORD(wp) == STN_CLICKED){
+                // 登録追加アイコン押下
+                PostMessage(hDlgWnd, WM_COMMAND, IDM_LABELSET, 0);
+            }
+            break;
+
 
         case IDM_SETTING:
             {
@@ -2025,7 +2130,7 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
 
                     // リストビューおよびDBから削除
                     nadb.tr_begin();
-                    LockWindowUpdate(hWndListView);
+                    LV_Lock(hWndListView);
                     RFOREACH(it, dbidx_lst){
                         unsigned int dbidx = *it;
                         if(!UnRegistration(dbidx)) continue;
@@ -2033,7 +2138,7 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                         if(lvidx < 0) continue;
                         DeleteListView(hWndListView, lvidx);
                     }
-                    LockWindowUpdate(NULL);
+                    LV_UnLock(hWndListView);
                     nadb.tr_commit();
                     break;
                 }
@@ -2044,12 +2149,12 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
 
                     // 変更あり、リストビューおよびDBへ反映
                     nadb.tr_begin();
-                    LockWindowUpdate(hWndListView);
+                    LV_Lock(hWndListView);
                     FOREACH(it, dbidx_lst){
                         unsigned int dbidx = *it;
                         updatelvdb(hWndListView, dbidx);
                     }
-                    LockWindowUpdate(NULL);
+                    LV_UnLock(hWndListView);
                     nadb.tr_commit();
 
                     // リストビューソートの反映
@@ -2075,12 +2180,12 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                 // 選択アイテム有効/無効切り替え
                 _dbg(_T("IDM_ENABLE/IDM_DISABLE\n"));
                 bool fCheck = (LOWORD(wp) == IDM_ENABLE) ? true : false;
-                int loc = -1;
+                int lvidx = -1;
                 nadb.tr_begin();
                 while(1){
-                    loc = ListView_GetNextItem(hWndListView, loc, LVNI_ALL | LVNI_SELECTED);
-                    if(loc < 0) break;
-                    ListView_SetCheckState(hWndListView, loc, fCheck);
+                    lvidx = ListView_GetNextItem(hWndListView, lvidx, LVNI_ALL | LVNI_SELECTED);
+                    if(lvidx < 0) break;
+                    ListView_SetCheckState(hWndListView, lvidx, fCheck);
                 }
                 nadb.tr_commit();
             }
@@ -2091,6 +2196,14 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                 // オンラインマニュアルページを開く
                 tstring url = NICOALERT_ONLINE_HELP; 
                 exec_browser(url);
+            }
+            break;
+
+        case IDM_LABELSET:
+            {
+                if(!hWndLabelDlg){
+                    CreateDialog(hInst, _T("DIALOG_LABELSET"), hDlgWnd, LabelSetDlgProc);
+                }
             }
             break;
 
@@ -2115,6 +2228,7 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
         case IDM_OPEN_CH:
         case IDM_OPEN_USER:
         case IDM_OPEN_LV:
+        case IDM_OPEN_LV_CB:
             {
                 // キー種別に応じたページオープン要求
                 if(ListView_GetSelectedCount(hWndListView) == 1){
@@ -2123,14 +2237,29 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                         if(lvidx < 0) break;
                         unsigned int dbidx = lvidx2dbidx(hWndListView, lvidx);
                         if(dbidx == 0) break;
-                        ITER(regdata_info) it = regdata_info.find(dbidx);
-                        if(it == regdata_info.end()) break;
 
-                        if(LOWORD(wp) == IDM_OPEN_LV && it->second.last_start != 0){
-                            exec_browser_by_key(it->second.last_lv);
-                        } else {
-                            exec_browser_by_key(it->second.key);
+                        regdata_info.lock();
+                        ITER(regdata_info) it = regdata_info.find(dbidx);
+                        if(it != regdata_info.end()){
+                            if(LOWORD(wp) != IDM_OPEN_LV_CB){
+                                tstring key = it->second.key;
+                                if(LOWORD(wp) == IDM_OPEN_LV && it->second.last_start != 0){
+                                    key = it->second.last_lv;
+                                }
+                                exec_browser_by_key(key);   // ブラウザで開く
+                            } else {
+                                tstring key = NICOLIVE_LVID_URL;
+                                if(it->second.last_start != 0){
+                                    key += it->second.last_lv;
+                                } else {
+                                    key += it->second.key;
+                                }
+                                _dbg(_T("copy to clipboard : %s"), key.c_str());
+                                CopyToClipBoard(key.c_str());   // クリップボードにコピー
+                            }
                         }
+                        regdata_info.unlock();
+
                     } while(0);
                 }
             }
@@ -2228,6 +2357,7 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
 
                         unsigned int dbidx = lvidx2dbidx(hWndListView, pnmlv->iItem);
                         if(dbidx > 0){
+                            regdata_info.lock();
                             ITER(regdata_info) it = regdata_info.find(dbidx);
                             if(it != regdata_info.end()){
                                 c_regdata *rd = &(it->second);
@@ -2236,6 +2366,7 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                                     nadb.updateregdata(*rd);
                                 }
                             }
+                            regdata_info.unlock();
                         }
                     }
                     break;
@@ -2263,57 +2394,62 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                 if(pnmhdr->code == NM_DBLCLK){
                     _dbg(_T("NM_DBLCLK\n"));
                 }
+#endif
 
                 if(pnmhdr->code == LVN_GETDISPINFO){
-                    LV_DISPINFO *pLvDispInfo = (LV_DISPINFO*)lp;
-                    TCHAR szString[MAX_PATH];
+                    // _dbg(_T("LVN_GETDISPINFO iItem = %d, iSubItem = %d\n"), plvdi->item.iItem, plvdi->item.iSubItem);
 
-                    if(pLvDispInfo->item.mask & LVIF_TEXT){
-                        int col = pLvDispInfo->item.iSubItem;
-                        int row = pLvDispInfo->item.iItem;
+                    NMLVDISPINFO *plvdi = (NMLVDISPINFO *)lp;
+                    //_dbg(_T("mask = %x, iItem = %d, iSubItem = %d, \n"),
+                    //    plvdi->item.mask, plvdi->item.iItem, plvdi->item.iSubItem);
+                    //_dbg(_T("state = %x, stateMask = %x\n"),
+                    //    plvdi->item.state, plvdi->item.stateMask);
+                    //_dbg(_T("pszText = %p, cchTextMax = %d, iImage = %d\n"),
+                    //    plvdi->item.pszText, plvdi->item.cchTextMax, plvdi->item.iImage);
+                    //_dbg(_T("lParam = %d, iIndent = %d, iGroupId = %d\n"),
+                    //    plvdi->item.lParam, plvdi->item.iIndent, plvdi->item.iGroupId);
+
+                    // TCHAR szString[MAX_PATH];
+
+                    if(plvdi->item.iSubItem == COLINDEX_LABEL){
+                        if(plvdi->item.mask & LVIF_TEXT){
+                            unsigned int dbidx = plvdi->item.lParam;
+                            if(dbidx > 0){
+                                regdata_info.lock();
+                                ITER(regdata_info) it = regdata_info.find(dbidx);
+                                if(it != regdata_info.end()){
+                                    c_regdata *rd = &(it->second);
+                                    unsigned int label = rd->label;
+                                    unsigned int mask = 1;
+                                    tstring labelstr;
+                                    for(int i = 0; i < NICOALERT_LABEL_MAX; i++){
+                                        if(label & mask){
+                                            if(labelstr == _T("")){
+                                                labelstr = sLabelName[i];
+                                            } else {
+                                                labelstr += _T(" ");
+                                                labelstr += sLabelName[i];
+                                            }
+                                        }
+                                        mask <<= 1;
+                                    }
+                                    _sntprintf_s(plvdi->item.pszText, plvdi->item.cchTextMax, plvdi->item.cchTextMax,
+                                        _T("%s"), labelstr.c_str());
+                                    plvdi->item.mask |= LVIF_DI_SETITEM; 
+                                }
+                                regdata_info.unlock();
+                            }
+                        }
+                    } else {
+#ifdef _DEBUG
+                        __debugbreak();
+#endif
                     }
                     break;
                 }
-#endif
 
                 if(pnmhdr->code == NM_HOVER){
                     _dbg(_T("NM_HOVER : Wnd = 0x%x : wp = 0x%x, lp = 0x%x\n"), pnmhdr->hwndFrom, wp, lp);
-#if 0
-
-                    LVHITTESTINFO info;
-                    memset(&info, 0, sizeof(info));
-                    POINT scpt;
-                    GetCursorPos(&scpt);
-                    info.pt = scpt;
-                    ScreenToClient(hWndListView, &info.pt);
-                    _dbg(_T("NM_HOVER : (%d,%d)\n"), info.pt.x, info.pt.y);
-
-                    if(ListView_HitTest(hWndListView, &info) >= 0){
-                        unsigned int dbidx = lvidx2dbidx(hWndListView, info.iItem);
-                    }
-                    RECT rect;
-                    ListView_GetSubItemRect(hWndListView, info.iItem, info.iSubItem, LVIR_BOUNDS, &rect);
-                    MapWindowPoints(hWndListView, hDlgWnd, (LPPOINT)&rect, 2);
-
-                    if(hToolTipWnd){
-                        TOOLINFO ti;
-                        memset(&ti, 0, sizeof(ti));
-                        ti.cbSize = sizeof(TOOLINFO);
-                        ti.hwnd = hDlgWnd;
-                        ti.uId = IDC_LISTVIEW;
-                        ti.rect = rect;
-                        SendMessage(hToolTipWnd, TTM_NEWTOOLRECT, 0, (LPARAM)&ti);
-                        
-                        SendMessage(hToolTipWnd, TTM_TRACKPOSITION, 0, MAKELPARAM(scpt.x, scpt.y));
-
-                        //TOOLINFO ti;
-                        memset(&ti, 0, sizeof(ti));
-                        ti.cbSize = sizeof(TOOLINFO);
-                        ti.hwnd = hDlgWnd;
-                        ti.uId = IDC_LISTVIEW;//(UINT_PTR)hWndListView;
-                        SendMessage(hToolTipWnd, TTM_TRACKACTIVATE, TRUE, (LPARAM)&ti);
-                    }
-#endif
                     // リストビューにLVS_EX_TRACKSELECTを設定しているが、
                     // LVN_HOTTRACK を検出するためだけなので、TRACKSELECTを無効化
                     SetWindowLong(hDlgWnd, DWL_MSGRESULT, (LONG)TRUE);
@@ -2335,6 +2471,7 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                     TCHAR msg[80]; msg[0] = '\0';
                     unsigned int dbidx = lvidx2dbidx(hWndListView, lpnmlv->iItem);
                     if(dbidx > 0){
+                        regdata_info.lock();
                         ITER(regdata_info) it = regdata_info.find(dbidx);
                         if(it != regdata_info.end()){
                             c_regdata *rd = &(it->second);
@@ -2356,6 +2493,7 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                                 _sntprintf_s(msg, ESIZEOF(msg), _T("%s"), rd->memo.c_str()); break;
                             }
                         }
+                        regdata_info.unlock();
                     }
 
                     // リストビューツールチップの範囲と文字列を通知
@@ -2395,7 +2533,15 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                             item.iSubItem = 0;
                             item.mask = LVIF_PARAM;
                             if(ListView_GetItem(pnmhdr->hwndFrom, &item)){
-                                unsigned int last_start = regdata_info[item.lParam].last_start;
+                                unsigned int dbidx = item.lParam;
+                                unsigned int last_start = 0;
+
+                                regdata_info.lock();
+                                ITER(regdata_info) it = regdata_info.find(dbidx);
+                                if(it != regdata_info.end()){
+                                    last_start = it->second.last_start;
+                                }
+                                regdata_info.unlock();
                                 // 放送開始から30分以内のアイテムに色を付ける
                                 if(last_start + BROADCAST_PERIOD > time(NULL)){
                                     lplvcd->clrText   = start_bc_color_tx;
@@ -2429,7 +2575,15 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                             item.iSubItem = 0;
                             item.mask = LVIF_PARAM;
                             if(ListView_GetItem(pnmhdr->hwndFrom, &item)){
-                                unsigned int notify = regdata_info[item.lParam].notify;
+                                unsigned int dbidx = item.lParam;
+                                unsigned int notify = 0;
+                                regdata_info.lock();
+                                ITER(regdata_info) it = regdata_info.find(dbidx);
+                                if(it != regdata_info.end()){
+                                    notify = it->second.notify;
+                                }
+                                regdata_info.unlock();
+
                                 if( (lplvcd->iSubItem == COLINDEX_BALLOON && (notify & NOTIFY_BALLOON)) ||
                                     (lplvcd->iSubItem == COLINDEX_BROWSER && (notify & NOTIFY_BROWSER)) ||
                                     (lplvcd->iSubItem == COLINDEX_SOUND   && (notify & NOTIFY_SOUND  )) ||
@@ -2452,14 +2606,61 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                                         ICO_SW, ICO_SH, 0, NULL, DI_NORMAL);
 
                                     SetWindowLong(hDlgWnd, DWL_MSGRESULT, (LONG)CDRF_SKIPDEFAULT);
-                                    break;
                                 }
-
                             }
                         }
                         break;
 
                     }
+                }
+            }
+            else if(pnmhdr->hwndFrom == hWndLvHdr){
+                // NMHEADER *phdn = (NMHEADER *)lp;
+                // NMHDR   hdr;
+                // int     iItem;
+                // int     iButton;
+                // HDITEMW *pitem;
+                switch(pnmhdr->code){
+                case HDN_ITEMCHANGED:       _dbg(_T("HDN_ITEMCHANGED\n"));      break;
+                case HDN_TRACK:             _dbg(_T("HDN_TRACK\n"));            break;
+                case HDN_BEGINTRACK:        _dbg(_T("HDN_BEGINTRACK\n"));       break;
+                case HDN_ITEMCHANGING:      _dbg(_T("HDN_ITEMCHANGING\n"));     break;
+                case NM_RELEASEDCAPTURE:    _dbg(_T("NM_RELEASEDCAPTURE\n"));   break;
+                case NM_CUSTOMDRAW:         _dbg(_T("NM_CUSTOMDRAW\n"));        break;
+
+                case HDN_ENDTRACK:
+                    {
+                        _dbg(_T("HDN_ENDTRACK\n"));
+                        NMHEADER *phdn = (NMHEADER *)lp;
+                        if(phdn->iItem != COLINDEX_ENABLE && 
+                            !(phdn->iItem >= COLINDEX_BALLOON && phdn->iItem <= COLINDEX_EXTAPP) )
+                        {
+                            if(phdn->pitem->mask & HDI_WIDTH){
+                                _dbg(_T("iItem = %d, cxy = %d\n"), phdn->iItem, phdn->pitem->cxy);
+                                TCHAR szHeaderWidthKey[64];
+                                _stprintf_s(szHeaderWidthKey, OPTION_HEADER_WIDTH_FORMAT, phdn->iItem);
+                                SaveOptionInt(szHeaderWidthKey, phdn->pitem->cxy);
+                            }
+                        }
+                    }
+                    break;
+                case HDN_DIVIDERDBLCLICK:
+                    {
+                        _dbg(_T("HDN_DIVIDERDBLCLICK\n"));
+                        NMHEADER *phdn = (NMHEADER *)lp;
+                        if(phdn->iItem != COLINDEX_ENABLE && 
+                            !(phdn->iItem >= COLINDEX_BALLOON && phdn->iItem <= COLINDEX_EXTAPP) ){
+                                _dbg(_T("iItem = %d, DBLCLK\n"), phdn->iItem);
+                                TCHAR szHeaderWidthKey[64];
+                                _stprintf_s(szHeaderWidthKey, OPTION_HEADER_WIDTH_FORMAT, phdn->iItem);
+                                DeleteOption(szHeaderWidthKey); // AutoFit
+                        }
+                    }
+                    break;
+
+                default:
+                    _dbg(_T("HEADER default: code = %08x\n"), pnmhdr->code);
+                    break;
                 }
             }
 #if 0
@@ -2518,6 +2719,111 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
         }
         break;
 
+    case WM_LABELRELOAD:
+        {
+            _dbg(_T("WM_LABELRELOAD\n"));
+            // ラベル名読み出し
+            for(int i = 0; i < NICOALERT_LABEL_MAX; i++){
+                TCHAR szLabelKey[64];
+                TCHAR szLabelNameDef[64];
+                _stprintf_s(szLabelKey, OPTION_LABEL_FORMAT, i+1);
+                _stprintf_s(szLabelNameDef, DEF_OPTION_LABEL_FORMAT, i+1);
+                tstring labelname = ReadOptionString(szLabelKey, szLabelNameDef);
+                sLabelName[i] = labelname;
+            }
+
+            LV_Lock(hWndListView);
+            int num = ListView_GetItemCount(hWndListView);
+            for(int i = 0; i < num; i++){
+                ListView_SetItemText(hWndListView, i, COLINDEX_LABEL, LPSTR_TEXTCALLBACK);
+            }
+            LV_UnLock(hWndListView);
+        }
+        break;
+
+    case WM_LABELCTL:
+        {
+            _dbg(_T("WM_LABELCTL\n"));
+            BOOL mode = (BOOL)wp;
+            int labelid = (int)lp;
+            if(labelid < 0 || labelid >= NICOALERT_LABEL_MAX) break;
+           
+            if(!nadb.tr_begin()) break;
+
+            // ラベル変更、リストビューおよびDBへ反映
+            LV_Lock(hWndListView);
+            regdata_info.lock();
+
+            int lvidx = -1;
+            while(1){
+                lvidx = ListView_GetNextItem(hWndListView, lvidx, LVNI_ALL | LVNI_SELECTED);
+                if(lvidx < 0) break;
+                unsigned int dbidx = lvidx2dbidx(hWndListView, lvidx);
+                if(dbidx > 0){
+                    ITER(regdata_info) it = regdata_info.find(dbidx);
+                    if(it != regdata_info.end()){
+                        c_regdata *rd = &(it->second);
+                        if(mode == LABEL_ADD){
+                            rd->label |= (1 << labelid);
+                        } else {
+                            rd->label &= ( ~(1 << labelid) );
+                        }
+                        nadb.updateregdata(*rd);
+                        UpdateListView(hWndListView, lvidx, rd);
+                    }
+                }
+            }
+            regdata_info.unlock();
+            LV_UnLock(hWndListView);
+
+            nadb.tr_commit();
+
+            // リストビューソートの反映
+            PostMessage(hDlgWnd, WM_ALINFO_NOTIFY, 0, TRUE);
+        }
+        break;
+
+    case WM_LABELFILTER:
+        {
+            _dbg(_T("WM_LABELFILTER\n"));
+            BOOL mode = (BOOL)wp;
+            int labelid = (int)lp;
+            if(labelid >= NICOALERT_LABEL_MAX) break;
+            unsigned int labelmask = (1 << labelid);
+            if(labelid < 0) labelmask = 0;
+
+            // ラベルフィルタの適用。
+            // 指定ラベルを持つエントリ以外をリストビューから削除
+            LV_Lock(hWndListView);
+            regdata_info.lock();
+
+            int num = ListView_GetItemCount(hWndListView);
+            for(int i = num-1; i >= 0; i--){
+                unsigned int dbidx = lvidx2dbidx(hWndListView, i);
+                if(dbidx == 0) continue;
+
+                ITER(regdata_info) it = regdata_info.find(dbidx);
+                if(it == regdata_info.end()) continue;
+                c_regdata *rd = &(it->second);
+                if( (labelmask == 0 && rd->label != 0) || (labelmask != 0 && !(rd->label & labelmask)) ){
+                    ListView_DeleteItem(hWndListView, i);
+                }
+            }
+
+            regdata_info.unlock();
+            LV_UnLock(hWndListView);
+        }
+        break;
+
+    case WM_CLEARFILTER:
+        {
+            _dbg(_T("WM_CLEARFILTER\n"));
+            // ラベルフィルタの全解除(リストビュー再構築)
+            UpdateListViewAll(hWndListView);
+            // リストビューソートの反映
+            PostMessage(hDlgWnd, WM_ALINFO_NOTIFY, 0, TRUE);
+        }
+        break;
 
     case WM_SIZING:
         {
@@ -2548,10 +2854,18 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
             // 移動先座標の保存。最大化、最小化時は無視。
             int nWidth = LOWORD(lp); 
             int nHeight = HIWORD(lp);
+#if 0
             SetWindowPos(hWndListView, NULL, 0, STATUS_BAR_SIZE, nWidth, nHeight-STATUS_BAR_SIZE, SWP_NOZORDER);
-
-            SetWindowPos(GetDlgItem(hDlgWnd, IDC_WRENCH), NULL, nWidth - ICO_BORDER_SW*2, 0, 0, 0, SWP_NOZORDER | SWP_NOSIZE | SWP_NOCOPYBITS);
-            SetWindowPos(GetDlgItem(hDlgWnd, IDC_BOOKMARK_PLUS), NULL, nWidth - ICO_BORDER_SW, 0, 0, 0, SWP_NOZORDER | SWP_NOSIZE | SWP_NOCOPYBITS);
+            SetWindowPos(GetDlgItem(hDlgWnd, IDC_WRENCH), NULL, nWidth - ICO_BORDER_SW*2, 0, 0, 0, SWP_NOZORDER | SWP_NOSIZE/* | SWP_NOCOPYBITS */);
+            SetWindowPos(GetDlgItem(hDlgWnd, IDC_BOOKMARK_PLUS), NULL, nWidth - ICO_BORDER_SW, 0, 0, 0, SWP_NOZORDER | SWP_NOSIZE/* | SWP_NOCOPYBITS */);
+#else
+            HDWP hDWP = BeginDeferWindowPos(4);
+            DeferWindowPos(hDWP, hWndListView, NULL, 0, STATUS_BAR_SIZE, nWidth, nHeight-STATUS_BAR_SIZE, SWP_NOZORDER);
+            DeferWindowPos(hDWP, GetDlgItem(hDlgWnd, IDC_WRENCH),        NULL, nWidth - ICO_BORDER_SW*3, 0, 0, 0, SWP_NOZORDER | SWP_NOSIZE | SWP_NOCOPYBITS );
+            DeferWindowPos(hDWP, GetDlgItem(hDlgWnd, IDC_BOOKMARK_PLUS), NULL, nWidth - ICO_BORDER_SW*2, 0, 0, 0, SWP_NOZORDER | SWP_NOSIZE | SWP_NOCOPYBITS );
+            DeferWindowPos(hDWP, GetDlgItem(hDlgWnd, IDC_LABELSET),      NULL, nWidth - ICO_BORDER_SW*1, 0, 0, 0, SWP_NOZORDER | SWP_NOSIZE | SWP_NOCOPYBITS );
+            EndDeferWindowPos(hDWP);
+#endif
 
             if(!IsZoomed(hDlgWnd) && !IsMinimized(hDlgWnd)){
                 _dbg(_T("Window Resize : %d,%d\n"), nWidth, nHeight);

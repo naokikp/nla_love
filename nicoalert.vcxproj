@@ -86,10 +86,12 @@ c:\tools\upx\upx.exe $(SolutionDir)\$(TargetFileName)</Command>
     <ClInclude Include="nicoalert_bcc.h" />
     <ClInclude Include="nicoalert_cmm.h" />
     <ClInclude Include="nicoalert_db.h" />
+    <ClInclude Include="nicoalert_label.h" />
     <ClInclude Include="nicoalert_name.h" />
     <ClInclude Include="nicoalert_ole.h" />
     <ClInclude Include="nicoalert_snd.h" />
     <ClInclude Include="nicoalert_ver.h" />
+    <ClInclude Include="nicoalert_wnd.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="sqlite3.h" />
   </ItemGroup>
@@ -102,6 +104,7 @@ c:\tools\upx\upx.exe $(SolutionDir)\$(TargetFileName)</Command>
     <ClCompile Include="nicoalert_cmm.cpp" />
     <ClCompile Include="nicoalert_db.cpp" />
     <ClCompile Include="nicoalert.cpp" />
+    <ClCompile Include="nicoalert_label.cpp" />
     <ClCompile Include="nicoalert_name.cpp" />
     <ClCompile Include="nicoalert_ole.cpp" />
     <ClCompile Include="nicoalert_snd.cpp" />

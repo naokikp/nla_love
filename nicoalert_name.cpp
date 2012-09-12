@@ -13,7 +13,7 @@ static HANDLE hConExitEvent = NULL;
 static volatile bool isConExit = false;
 
 // 各種コールバック
-static void(*callback_alinfo_ntf)(unsigned int) = NULL;
+static void(*callback_alinfo_ntf)(unsigned int, BOOL) = NULL;
 static void(*callback_msginfo)(const TCHAR *) = NULL;
 
 // キー名称取得要求インデックスキュー
@@ -23,12 +23,20 @@ static deque_ts<unsigned int> acq_check;
 
 
 static void keyname_acq_nummsg(unsigned int num, bool flag){
-    if(num == 0) return;
-    if(!flag && (num % 100) != 0) return;
+    if(!flag){
+        if(num >= 100 && (num % 100) != 0) return;
+        if(num < 100 && (num % 10) != 0) return;
+    }
     if(callback_msginfo){
-        TCHAR msg[128];
-        _stprintf_s(msg, _T("コミュ/チャンネル/放送名取得中: 残%d件"), num);
-        callback_msginfo(msg);
+        if(num == 0){
+            if(!flag){
+                callback_msginfo(_T("コミュ/チャンネル/放送名 取得完了"));
+            }
+        } else {
+            TCHAR msg[128];
+            _stprintf_s(msg, _T("コミュ/チャンネル/放送名取得中: 残%d件"), num);
+            callback_msginfo(msg);
+        }
     }
 }
 
@@ -57,9 +65,8 @@ static void keyname_acq_thread(void *arg){
             // 自動取得済みフラグが立っている場合は何もしない
             tstring key = _T("");
             tstring keyname;
-            ITER(regdata_info) it;
             regdata_info.lock();
-            it = regdata_info.find(dbidx);
+            ITER(regdata_info) it = regdata_info.find(dbidx);
             if(it != regdata_info.end()){
                 if(!(it->second.notify & NOTIFY_AUTOCOACQ)){
                     key = it->second.key;
@@ -93,7 +100,7 @@ static void keyname_acq_thread(void *arg){
 
             // メインウィンドウのリストビュー更新
             if(callback_alinfo_ntf){
-                callback_alinfo_ntf(dbidx);
+                callback_alinfo_ntf(dbidx, FALSE);
             }
             keyname_acq_nummsg(acq_dbidx.size(), false);
 
@@ -148,7 +155,7 @@ void con_add(unsigned int mindbidx){
 }
 
 // 自動取得処理スレッド起動
-bool con_start( void(*cb_alinfo_ntf)(unsigned int), void(*cb_msginfo)(const TCHAR *) ){
+bool con_start( void(*cb_alinfo_ntf)(unsigned int, BOOL), void(*cb_msginfo)(const TCHAR *) ){
     callback_alinfo_ntf = cb_alinfo_ntf;
     callback_msginfo = cb_msginfo;
 

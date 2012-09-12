@@ -9,7 +9,7 @@
 void con_add(unsigned int mindbidx);
 void con_start(void);
 
-bool con_start( void(*)(unsigned int), void(*)(const TCHAR *) );
+bool con_start( void(*)(unsigned int, BOOL), void(*)(const TCHAR *) );
 bool con_exit(void);
 
 #endif

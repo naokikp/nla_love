@@ -174,6 +174,24 @@ bool nicoalert_db::savesetting(setting &setting_info){
     return true;
 }
 
+// DBスキーマバージョンアップ
+// 現状ver1→2のみサポート
+bool nicoalert_db::verupregdata(int oldver, int newver){
+    if(oldver != 1 || newver != 2){
+        MessageBox(NULL, _T("未サポートのデータベースバージョンです。"), PROGRAM_NAME, MB_OK | MB_ICONASTERISK);
+        return false;
+    }
+
+    // テーブル無しならスルー
+    bool exist;
+    if(!istableexist(NADB_TABLE_REGIST, exist)) return false;
+    if(!exist) return true;
+
+    if(!execsql(NADB_DBUPDATE_1TO2_REGIST)) return false;
+    return true;
+}
+
+
 // 登録情報読み出し
 bool nicoalert_db::loadregdata(regdata &regdata_info){
     if(dbh == NULL) return false;
@@ -201,7 +219,7 @@ bool nicoalert_db::loadregdata(regdata &regdata_info){
 
     while(sqlite3_step(stmt) == SQLITE_ROW){
         TCHAR *pkey, *pkey_name, *plast_lv, *pmemo;
-        unsigned idx, last_start, notify;
+        unsigned idx, last_start, notify, label;
         idx         = sqlite3_column_int(stmt, 0);
         pkey        = (TCHAR *)sqlite3_column_ttext(stmt, 1);
         pkey_name   = (TCHAR *)sqlite3_column_ttext(stmt, 2);
@@ -209,6 +227,7 @@ bool nicoalert_db::loadregdata(regdata &regdata_info){
         plast_lv    = (TCHAR *)sqlite3_column_ttext(stmt, 4);
         last_start  = sqlite3_column_int(stmt, 5);
         notify      = sqlite3_column_int(stmt, 6);
+        label       = sqlite3_column_int(stmt, 7);
 
         c_regdata rd;
         rd.idx = idx;
@@ -218,6 +237,7 @@ bool nicoalert_db::loadregdata(regdata &regdata_info){
         if(plast_lv) rd.last_lv = plast_lv;
         rd.last_start = last_start;
         rd.notify = notify;
+        rd.label = label;
 
         regdata_info[idx] = rd;
 
@@ -276,7 +296,8 @@ bool nicoalert_db::updateregdata(c_regdata &cr){
     sqlite3_stmt* stmt;
 
     // 登録情報レコード更新
-    _stprintf_s(sql, _T("UPDATE '%s' SET %s WHERE %s"), NADB_TABLE_REGIST, NADB_COLUMN_UPDATESET_REGIST, NADB_COLUMN_UPDATEKEY_REGIST);
+    _stprintf_s(sql, _T("UPDATE '%s' SET %s WHERE %s"),
+        NADB_TABLE_REGIST, NADB_COLUMN_UPDATESET_REGIST, NADB_COLUMN_UPDATEKEY_REGIST);
     st = sqlite3_tprepare(dbh, sql, -1, &stmt, NULL);
     if(st != SQLITE_OK || !stmt) return false;
 
@@ -287,7 +308,8 @@ bool nicoalert_db::updateregdata(c_regdata &cr){
         sqlite3_bind_ttext(stmt, 3, cr.last_lv.c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_int  (stmt, 4, cr.last_start);
         sqlite3_bind_int  (stmt, 5, cr.notify);
-        sqlite3_bind_ttext(stmt, 6, cr.key.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int  (stmt, 6, cr.label);
+        sqlite3_bind_ttext(stmt, 7, cr.key.c_str(), -1, SQLITE_TRANSIENT);
 
         if(sqlite3_step(stmt) != SQLITE_DONE) break;
         if(sqlite3_reset(stmt) != SQLITE_OK) break;
@@ -330,21 +352,45 @@ bool nicoalert_db::deleteregdata(c_regdata &cr){
     return delete_success;
 }
 
+// 登録情報テーブルの存在チェック
+bool nicoalert_db::istableexistregdata(void){
+    if(dbh == NULL) return false;
+    bool exist;
+    if(!istableexist(NADB_TABLE_REGIST, exist)) return false;
+    return exist;
+}
+
 // トランザクション開始
 bool nicoalert_db::tr_begin(void){
-    if(transaction) return false;
-    transaction = true;
+    if(transaction_count > 0){
+        transaction_count++;
+        return true;
+    }
+    transaction_count = 1;
     return execsql(_T("BEGIN"));
 }
 // トランザクション終了(確定)
 bool nicoalert_db::tr_commit(void){
-    if(!transaction) return false;
-    transaction = false;
+    if(transaction_count == 0) return false;
+    if(transaction_count > 1){
+        transaction_count--;
+        return true;
+    }
+    transaction_count = 0;
     return execsql(_T("COMMIT"));
 }
 // トランザクション終了(ロールバック)
 bool nicoalert_db::tr_rollback(void){
-    if(!transaction) return false;
-    transaction = false;
+    if(transaction_count == 0) return false;
+    if(transaction_count > 1){
+        transaction_count--;
+        return true;
+    }
+    transaction_count = 0;
     return execsql(_T("ROLLBACK"));
+}
+
+// クリーンアップ
+bool nicoalert_db::cleanup(void){
+    return execsql(_T("VACUUM"));
 }

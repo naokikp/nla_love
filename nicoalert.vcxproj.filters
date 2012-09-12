@@ -48,6 +48,12 @@
     <ClInclude Include="nicoalert_ole.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
+    <ClInclude Include="nicoalert_label.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="nicoalert_wnd.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="resource.rc">
@@ -83,6 +89,9 @@
       <Filter>ソース ファイル</Filter>
     </ClCompile>
     <ClCompile Include="nicoalert_ole.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="nicoalert_label.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
   </ItemGroup>

@@ -18,7 +18,7 @@ static HANDLE hBCSCExitEvent = NULL;
 static volatile bool isBCSCExit = false;
 
 // 各種コールバック
-static void(*callback_alinfo_ntf)(unsigned int) = NULL;
+static void(*callback_alinfo_ntf)(unsigned int, BOOL) = NULL;
 static void(*callback_msgtray)(const TCHAR *, tstring &) = NULL;
 static void(*callback_msginfo)(const TCHAR *) = NULL;
 
@@ -130,7 +130,7 @@ static void bcc_check(int infotype, tstring &lvid, unsigned int idx[3]){
             notify |= rd->notify;
         }
         if(callback_alinfo_ntf){
-            callback_alinfo_ntf(idx[i]);
+            callback_alinfo_ntf(idx[i], TRUE);
         }
         trd = rd;
     }
@@ -295,7 +295,7 @@ static void bcc_check_thread(void *arg){
 
 // bccスレッド起動
 bool bcc_start(
-    void(*cb_alinfo_ntf)(unsigned int),
+    void(*cb_alinfo_ntf)(unsigned int, BOOL),
     void(*cb_msgtray)(const TCHAR *, tstring &last_lv),
     void(*cb_msginfo)(const TCHAR *) )
 {

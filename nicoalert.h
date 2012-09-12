@@ -39,8 +39,6 @@ extern HINSTANCE hInst;
 
 void _dbg(const TCHAR *fmt, ...);
 void timefmt(TCHAR *p, int len, unsigned int t);
-
-LRESULT CALLBACK MainDlgProc(HWND, UINT, WPARAM, LPARAM);
 void doevent(void);
 
 #define WINDOWWIDTH 480
@@ -84,6 +82,7 @@ struct c_regdata {
     unsigned int last_start;
     unsigned int notify;
     tstring memo;
+    unsigned int label;
 };
 
 template <class T, class U> class map_ts : public map<T, U> {
@@ -130,10 +129,18 @@ tstring ReadOptionString(const TCHAR *key, const TCHAR *default_val);
 unsigned int ReadOptionInt(const TCHAR *key, unsigned int default_val);
 void SaveOptionString(const TCHAR *key, const TCHAR *value);
 void SaveOptionInt(const TCHAR *key, unsigned int value);
+void DeleteOption(const TCHAR *key);
 
 HICON LoadIconRsc(const TCHAR *res);
 unsigned int GetOSVer(void);
+bool CopyToClipBoard(const TCHAR *str);
+bool WindowSubClass(HWND hWnd, FARPROC HookProc);
 
+#ifdef _UNICODE
+#define NICOALERT_CLIPBOARD_FORMAT  CF_UNICODETEXT
+#else
+#define NICOALERT_CLIPBOARD_FORMAT  CF_TEXT
+#endif
 
 #define ICO_SW      16
 #define ICO_SH      16
@@ -152,6 +159,10 @@ unsigned int GetOSVer(void);
 #define WM_TASKTRAY             (WM_APP+2)
 #define WM_OLEDROP              (WM_APP+3)
 #define WM_MSGINFO_UPDATE       (WM_APP+4)
+#define WM_LABELRELOAD          (WM_APP+5)
+#define WM_LABELCTL             (WM_APP+6)
+#define WM_LABELFILTER          (WM_APP+7)
+#define WM_CLEARFILTER          (WM_APP+8)
 
 #define NOTIFY_ENABLE           0x00000001
 #define NOTIFY_BALLOON          0x00000002
@@ -171,14 +182,21 @@ unsigned int GetOSVer(void);
 
 #define OPTION_BETA_VERSION_CONFIRM     _T("beta_version_confirm")
 
+// スキーマバージョン
+#define OPTION_DATABASE_VERSION         _T("db_ver")
+#define OPTION_DATABASE_VERSION_DEF     1
+#define OPTION_DATABASE_VERSION_NEW     2
+
 // メイン画面設定情報
 #define OPTION_WIDTH                    _T("width")
 #define OPTION_HEIGHT                   _T("height")
 #define OPTION_WINDOW_XPOS              _T("window_xpos")
 #define OPTION_WINDOW_YPOS              _T("window_ypos")
 #define OPTION_SORT_INDEX               _T("sort_index")
-
 #define DEF_OPTION_SORT_INDEX           0
+
+#define OPTION_HEADER_WIDTH_FORMAT      _T("header_width_%02u")
+
 
 // 設定画面情報
 #define OPTION_MINIMIZE_ON_CLOSE        _T("minimize_on_close")
@@ -247,6 +265,7 @@ enum COLINDEX {
     COLINDEX_SOUND,
     COLINDEX_EXTAPP,
     COLINDEX_MEMO,
+    COLINDEX_LABEL,
 };
 
 #define PROCESS_EXIT_WAITCOUNT  10

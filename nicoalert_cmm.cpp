@@ -49,7 +49,8 @@ static void htmldecode(tstring &str){
         { _T("&lt;"), _T("<"), },
         { _T("&gt;"), _T(">"), },
         { _T("&quot;"), _T("\""), },
-        { _T("&nbsp;"), _T("\xa0"), },
+        { _T("&nbsp;"), _T("\xA0"), },
+        { _T("&copy;"), _T("\xA9"), },
     };
     tstring out, in = str;
     int loc_amp, loc_sc, len;
