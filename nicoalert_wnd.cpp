@@ -249,7 +249,6 @@ static bool LoadDatabase(){
     }
 
     // スキーマバージョンチェック
-    // TODO: 新バージョンでの新規作成
     int dbver = ReadOptionInt(OPTION_DATABASE_VERSION, OPTION_DATABASE_VERSION_DEF);
 
     // 登録情報テーブルが存在しない場合、最新版とする。
@@ -1879,13 +1878,13 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
             SetTimer(hDlgWnd, TID_SETTING, 5000, NULL);
 
             // 各スレッド起動
-            if(!cmm_start(alertinfo_ind, msginfo_ind)){
-                MessageBox(hDlgWnd, _T("スレッドが起動できません。(cmm_start)"), PROGRAM_NAME, MB_OK | MB_ICONERROR);
+            if(!bcc_start(alertinfo_ntf, nawnd_msgicon, msginfo_ind)){
+                MessageBox(hDlgWnd, _T("スレッドが起動できません。(bcc_start)"), PROGRAM_NAME, MB_OK | MB_ICONERROR);
                 PostQuitMessage(1);
                 return FALSE;
             }
-            if(!bcc_start(alertinfo_ntf, nawnd_msgicon, msginfo_ind)){
-                MessageBox(hDlgWnd, _T("スレッドが起動できません。(bcc_start)"), PROGRAM_NAME, MB_OK | MB_ICONERROR);
+            if(!cmm_start(alertinfo_ind, msginfo_ind)){
+                MessageBox(hDlgWnd, _T("スレッドが起動できません。(cmm_start)"), PROGRAM_NAME, MB_OK | MB_ICONERROR);
                 PostQuitMessage(1);
                 return FALSE;
             }
@@ -2105,28 +2104,32 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                 item.stateMask = -1;
 
                 // 選択アイテムのlvidx→dbidxリストを生成
-                // TODO: GetNextItemに変えれば少し早くなるはず。
-                for(int i = 0; i < num; i++){
-                    item.iItem = i;
-                    if(ListView_GetItem(hWndListView, &item)){
-                        if(item.state & LVIS_SELECTED){
-                            dbidx_lst.push_back(item.lParam);
-                        }
-                        if(item.state & LVIS_FOCUSED){
-                            focusidx = item.lParam;
-                        }
+                int lvidx = -1;
+                unsigned int dbidx;
+                while(1){
+                    lvidx = ListView_GetNextItem(hWndListView, lvidx, LVNI_ALL | LVNI_SELECTED);
+                    if(lvidx < 0) break;
+                    dbidx = lvidx2dbidx(hWndListView, lvidx);
+                    if(dbidx > 0) dbidx_lst.push_back(dbidx);
+                }
+
+                // 選択アイテムがなければフォーカスアイテムを採用
+                if(dbidx_lst.size() == 0){
+                    lvidx = ListView_GetNextItem(hWndListView, -1, LVNI_ALL | LVNI_FOCUSED);
+                    if(lvidx >= 0){
+                        dbidx = lvidx2dbidx(hWndListView, lvidx);
+                        if(dbidx > 0) dbidx_lst.push_back(dbidx);
                     }
                 }
-                // 選択アイテムがなければフォーカスアイテムを採用
-                if(dbidx_lst.size() == 0 && focusidx > 0){
-                    dbidx_lst.push_back(focusidx);
-                }
+
+                // それでも何もなければ何もしない
+                if(dbidx_lst.size() == 0) break;
 
                 if(LOWORD(wp) == IDM_REGDEL){
                     // 選択アイテム削除
                     TCHAR buf[256];
                     _stprintf_s(buf, _T("%d 件の登録を削除しますか？"), dbidx_lst.size());
-                    if(MessageBox(hDlgWnd, buf, PROGRAM_NAME, MB_YESNO | MB_ICONQUESTION) != IDYES) break;
+                    if(MessageBox(hDlgWnd, buf, PROGRAM_NAME, MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2) != IDYES) break;
 
                     // リストビューおよびDBから削除
                     nadb.tr_begin();
@@ -2922,10 +2925,10 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
             // 各処理スレッド停止
             _dbg(_T("con_exit()\n"));
             con_exit();
-            _dbg(_T("bcc_exit()\n"));
-            bcc_exit();
             _dbg(_T("com_exit()\n"));
             cmm_exit();
+            _dbg(_T("bcc_exit()\n"));
+            bcc_exit();
 
             // タスクトレイアイコン消去
             nawnd_delicon();

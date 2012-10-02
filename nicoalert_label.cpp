@@ -1,3 +1,5 @@
+//	ニコ生アラート(Love)
+//	Copyright (C) 2012 naoki.kp
 
 #include "nicoalert.h"
 #include "nicoalert_label.h"

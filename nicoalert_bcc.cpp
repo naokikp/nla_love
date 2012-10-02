@@ -289,6 +289,7 @@ static void bcc_check_thread(void *arg){
         }
     }
 
+    bcc_queue.clear();
     // スレッド終了通知
     SetEvent(hBCSCExitEvent);
 }
@@ -332,8 +333,11 @@ bool bcc_exit(void){
         waitcount--;
     }
 
+    nasnd.close();
+
+    alinfo.lock();
     alinfo.clear();
-    bcc_queue.clear();
+    alinfo.unlock();
 
     return true;
 }

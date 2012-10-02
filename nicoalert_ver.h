@@ -4,9 +4,9 @@
 
 
 #define PROGRAM_NAME        _T("ニコ生アラート(Love)")
-#define VERSION_STRING      _T("v0.2")
-#define VERSION_STRING_RSC  "0, 2, 0, 0"
-#define UA_STRING           "NicoLiveAlert(Love)/20120913/0.2"
+#define VERSION_STRING      _T("v0.3")
+#define VERSION_STRING_RSC  "0, 3, 0, 0"
+#define UA_STRING           "NicoLiveAlert(Love)/20121002/0.3"
 #define BETA_VERSION
 
 

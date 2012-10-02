@@ -19,7 +19,7 @@ static void(*callback_msginfo)(const TCHAR *) = NULL;
 // キー名称取得要求インデックスキュー
 static deque_ts<unsigned int> acq_dbidx;
 // 取得タイミング制御用キュー
-static deque_ts<unsigned int> acq_check;
+static deque<unsigned int> acq_check;
 
 
 static void keyname_acq_nummsg(unsigned int num, bool flag){
@@ -129,6 +129,8 @@ static void keyname_acq_thread(void *arg){
         }
     }
 
+    acq_check.clear();
+    // スレッド終了通知
     SetEvent(hConExitEvent);
 }
 
@@ -188,8 +190,9 @@ bool con_exit(void){
         waitcount--;
     }
 
+    acq_dbidx.lock();
     acq_dbidx.clear();
-    acq_check.clear();
+    acq_dbidx.unlock();
 
     return true;
 }
