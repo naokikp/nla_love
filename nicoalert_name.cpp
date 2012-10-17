@@ -19,7 +19,7 @@ static void(*callback_msginfo)(const TCHAR *) = NULL;
 // キー名称取得要求インデックスキュー
 static deque_ts<unsigned int> acq_dbidx;
 // 取得タイミング制御用キュー
-static deque<unsigned int> acq_check;
+static deque<time_t> acq_check;
 
 
 static void keyname_acq_nummsg(unsigned int num, bool flag){
@@ -110,11 +110,11 @@ static void keyname_acq_thread(void *arg){
             //  ACQ_CHECK_TIME 秒以上経過すると取得数カウントキューから抜ける
             while(!isConExit){
                 if(acq_check.size() >= ACQ_CHECK_COUNT){
-                    if(acq_check.front() + ACQ_CHECK_TIME < (unsigned int)time(NULL)){
+                    if(acq_check.front() + ACQ_CHECK_TIME < time(NULL)){
                         acq_check.pop_front();
                     }
                     if(acq_check.size()){
-                        if(acq_check.back() + ACQ_CHECK_TIME_SL < (unsigned int)time(NULL)){
+                        if(acq_check.back() + ACQ_CHECK_TIME_SL < time(NULL)){
                             break;
                         }
                     }
@@ -123,7 +123,7 @@ static void keyname_acq_thread(void *arg){
                 }
                 Sleep(500);
             }
-            acq_check.push_back((unsigned int)time(NULL));
+            acq_check.push_back(time(NULL));
             Sleep(1000);
 
         }

@@ -219,13 +219,14 @@ bool nicoalert_db::loadregdata(regdata &regdata_info){
 
     while(sqlite3_step(stmt) == SQLITE_ROW){
         TCHAR *pkey, *pkey_name, *plast_lv, *pmemo;
-        unsigned idx, last_start, notify, label;
+        unsigned idx, notify, label;
+        time_t last_start;
         idx         = sqlite3_column_int(stmt, 0);
         pkey        = (TCHAR *)sqlite3_column_ttext(stmt, 1);
         pkey_name   = (TCHAR *)sqlite3_column_ttext(stmt, 2);
         pmemo       = (TCHAR *)sqlite3_column_ttext(stmt, 3);
         plast_lv    = (TCHAR *)sqlite3_column_ttext(stmt, 4);
-        last_start  = sqlite3_column_int(stmt, 5);
+        last_start  = sqlite3_column_int64(stmt, 5);
         notify      = sqlite3_column_int(stmt, 6);
         label       = sqlite3_column_int(stmt, 7);
 
@@ -306,7 +307,7 @@ bool nicoalert_db::updateregdata(c_regdata &cr){
         sqlite3_bind_ttext(stmt, 1, cr.key_name.c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_ttext(stmt, 2, cr.memo.c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_ttext(stmt, 3, cr.last_lv.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_int  (stmt, 4, cr.last_start);
+        sqlite3_bind_int64(stmt, 4, cr.last_start);
         sqlite3_bind_int  (stmt, 5, cr.notify);
         sqlite3_bind_int  (stmt, 6, cr.label);
         sqlite3_bind_ttext(stmt, 7, cr.key.c_str(), -1, SQLITE_TRANSIENT);

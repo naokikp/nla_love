@@ -33,6 +33,8 @@ using namespace rapidxml;
 #define CMM_ERROR_WAITTIME_LIMIT    300     // エラー時待機時間最大値(秒)
 #define CMM_ERROR_WAITTIME_RESET    360     // エラーカウントリセット時間(秒)
 #define CMM_MAINT_WAITTIME          1800    // メンテナンス時待機時間(秒)
+#define CMM_RECVHB_TIMEOUT          630     // データ受信タイムアウト(秒)
+#define CMM_SENDHB_TIMEOUT          60      // コネクション維持監視タイマ(秒)
 
 #define LOCATION_HDR                "location:"
 #define LOCATION_HTTP_PROTO         "http://"

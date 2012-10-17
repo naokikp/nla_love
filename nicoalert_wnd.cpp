@@ -1349,7 +1349,11 @@ static int CALLBACK fnCompare_(LPARAM idx1, LPARAM idx2, LPARAM col){
         case COLINDEX_MEMO:
             ret = cr1->memo.compare(cr2->memo); break;
         case COLINDEX_LASTSTART:
-            ret = cr2->last_start - cr1->last_start; break;
+            {
+                time_t td = cr2->last_start - cr1->last_start;
+                ret = 0; if(td < 0) ret = -1; else ret = 1;
+            }
+            break;
         case COLINDEX_LABEL:
             ret = cr1->label - cr2->label; break;
         }
@@ -1651,7 +1655,7 @@ static void nawnd_initicon(HWND hWnd){
     nIcon.uFlags    = NIF_MESSAGE | NIF_ICON | NIF_TIP;
     nIcon.uCallbackMessage  = WM_TASKTRAY;
     nIcon.hIcon     = LoadIconRsc(_T("IDI_NOTIFY"));
-    _tcscpy_s(nIcon.szTip, PROGRAM_NAME);
+    _stprintf_s(nIcon.szTip, _T("%s %s"), PROGRAM_NAME, VERSION_STRING);
     nIcon.uTimeout = 30000;
     _tcscpy_s(nIcon.szInfoTitle, PROGRAM_NAME);
 
@@ -1783,6 +1787,8 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                 }
                 SaveOptionInt(OPTION_BETA_VERSION_CONFIRM, 1);
             }
+#else
+            DeleteOption(OPTION_BETA_VERSION_CONFIRM);
 #endif
             // ウィンドウサイズ設定読み出し
             unsigned int width = ReadOptionInt(OPTION_WIDTH, WINDOWWIDTH);
@@ -2537,7 +2543,7 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                             item.mask = LVIF_PARAM;
                             if(ListView_GetItem(pnmhdr->hwndFrom, &item)){
                                 unsigned int dbidx = item.lParam;
-                                unsigned int last_start = 0;
+                                time_t last_start = 0;
 
                                 regdata_info.lock();
                                 ITER(regdata_info) it = regdata_info.find(dbidx);

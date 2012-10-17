@@ -932,11 +932,26 @@ static int nicoalert_cmm(void){
         FD_SET(s, &fds);
         nfds = s + 1;
 
+        time_t now, lastrecv, lastsend;
+        lastrecv = lastsend = time(NULL);
+
         while(!isCmmExit){
             if(respdatalen >= sizeof(respdata)){
+                _dbg(_T("ERROR: 受信バッファFULL\n"));
                 // 通常ありえないが、異常処理としてバッファ全破棄
                 respdata[sizeof(respdata)-1] = '\0';
                 respdatalen = 0;
+            }
+
+            now = time(NULL);
+            if(lastrecv + CMM_RECVHB_TIMEOUT < now){
+                _dbg(_T("ERROR: RECV HBタイムアウト\n"));
+                break;
+            }
+            if(lastsend + CMM_SENDHB_TIMEOUT < now){
+                _dbg(_T("SEND HB\n"));
+                ret = send(s, "", 1, 0);
+                lastsend = now;
             }
 
             // データ受信待ち
@@ -951,9 +966,11 @@ static int nicoalert_cmm(void){
             ret = recv(s, respdata + respdatalen, sizeof(respdata)-respdatalen, 0);
             if(ret < 0) break;
             if(ret == 0){
+                _dbg(_T("コネクション正常切断\n"));
                 recv_err = false;
                 break;
             }
+            lastrecv = now;
 
             respdatalen += ret;
 

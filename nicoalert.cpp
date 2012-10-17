@@ -115,13 +115,19 @@ bool exec_browser_by_key(tstring &key){
 
 
 // タイプスタンプ文字列取得
-void timefmt(TCHAR *p, int len, unsigned int t){
+void timefmt(TCHAR *p, int len, time_t t){
     time_t tim = t;
+    errno_t ecode = 0;
     tm ltm;
     if(t == 0){
         time(&tim);
     }
-    localtime_s(&ltm, &tim);
+    ecode = localtime_s(&ltm, &tim);
+    if(ecode != 0){
+        _dbg(_T("errno = %d\n"), ecode);
+        _stprintf_s(p, len, _T("不正時刻: %I64d"), t);
+        return;
+    }
     _stprintf_s(p, len, _T("%04d/%02d/%02d %02d:%02d:%02d"),
         ltm.tm_year + 1900, ltm.tm_mon + 1, ltm.tm_mday,
         ltm.tm_hour, ltm.tm_min, ltm.tm_sec);

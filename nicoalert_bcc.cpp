@@ -11,7 +11,7 @@ static deque_ts<c_alertinfo> alinfo;
 // アラート通知イベント
 static HANDLE hBCSCEvent = NULL;
 // アラート通知済み放送番号キュー
-static deque < pair<unsigned int, tstring> > bcc_queue;
+static deque < pair<time_t, tstring> > bcc_queue;
 
 // スレッド終了通知
 static HANDLE hBCSCExitEvent = NULL;
@@ -99,7 +99,7 @@ bool bcc_startstat(unsigned int *count, unsigned int *period){
 // アラート通知処理
 static void bcc_check(int infotype, tstring &lvid, unsigned int idx[3]){
 
-    unsigned int now = (unsigned int)time(NULL);
+    time_t now = time(NULL);
 
     // 通知済み放送番号のデータを削除(BCC_QUEUE_TIME sec保持)
     while(bcc_queue.size() && bcc_queue.front().first + BCC_QUEUE_TIME < now){

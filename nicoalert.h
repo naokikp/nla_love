@@ -38,7 +38,7 @@ extern HINSTANCE hInst;
 #endif
 
 void _dbg(const TCHAR *fmt, ...);
-void timefmt(TCHAR *p, int len, unsigned int t);
+void timefmt(TCHAR *p, int len, time_t t);
 void doevent(void);
 
 #define WINDOWWIDTH 480
@@ -79,7 +79,7 @@ struct c_regdata {
     tstring key;
     tstring key_name;
     tstring last_lv;
-    unsigned int last_start;
+    time_t last_start;
     unsigned int notify;
     tstring memo;
     unsigned int label;
