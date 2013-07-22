@@ -332,7 +332,7 @@ HWND ToolTipInit(HWND hDlgWnd, HINSTANCE hInstance, const ToolTipInfo *tti, int 
         HWND hWnd = GetDlgItem(hDlgWnd, tti[i].uDlgItem);
         ti.uId = (UINT_PTR)hWnd;
         ti.lpszText = tti[i].msg;
-        SendMessage(hToolTip, TTM_ADDTOOL, 0, (LPARAM)&ti); 
+        SendMessage(hToolTip, TTM_ADDTOOL, 0, (LPARAM)&ti);
     }
 
     // 折り返し用
@@ -493,14 +493,17 @@ static unsigned int Registration(TCHAR *buf){
 
             if(idnum != ULONG_MAX || errno != ERANGE){
                 c_regdata rd;
-                memset(&rd, 0, sizeof(rd));
 
                 _stprintf_s(tbuf, _T("%s%lu"), checkstr[i], idnum);
                 rd.key = tbuf;
                 if(nadb.newregdata(rd)){
+                    // idxとkey以外 無効フィールド
+                    rd.key_name.clear();
+                    rd.last_lv.clear();
                     rd.last_start = 0;
                     rd.notify = ReadOptionInt(OPTION_DEFAULT_NOTIFY, DEF_OPTION_DEFAULT_NOTIFY) | NOTIFY_ENABLE;
                     rd.label = 0;
+                    rd.memo.clear();
 
                     if(!nadb.updateregdata(rd)){
                         cnt_fail++;
@@ -1872,12 +1875,16 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                 memset(&ti, 0, sizeof(ti));
                 ti.cbSize = sizeof(TOOLINFO);
                 ti.hwnd = hWndListView;
-                ti.hinst = hInst; 
+                ti.hinst = hInst;
                 ti.uFlags = TTF_SUBCLASS;
 
                 ti.uId = 0;
                 ti.lpszText = _T("");//LPSTR_TEXTCALLBACK;
                 SendMessage(hToolTipWnd, TTM_ADDTOOL, 0, (LPARAM)&ti); 
+
+                // ツールチップ表示ON/OFFを反映
+                BOOL tip = ReadOptionInt(OPTION_TOOLTIP_HELP, DEF_OPTION_TOOLTIP_HELP)?TRUE:FALSE;
+                SendMessage(hToolTipWnd, TTM_ACTIVATE, tip, 0);
             }
 
             // 設定保存インターバルタイマ

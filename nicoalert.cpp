@@ -270,6 +270,7 @@ void doevent(void){
 int WINAPI WinMain(HINSTANCE hCurInst, HINSTANCE hPrevInst, LPSTR lpsCmdLine, int nCmdShow){
 
     _CrtSetDbgFlag(_CRTDBG_LEAK_CHECK_DF | _CRTDBG_ALLOC_MEM_DF);
+    //_CrtSetBreakAlloc(229366);
 
     if(!hPrevInst){
 		if(!InitApp(hCurInst, szClassName)){

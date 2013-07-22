@@ -73,7 +73,10 @@ static void keyname_acq_thread(void *arg){
                 }
             }
             regdata_info.unlock();
-            if(key == _T("")) continue;
+            if(key == _T("")){
+                keyname_acq_nummsg(acq_dbidx.size(), false);
+                continue;
+            }
 
             // キー名称取得要求
             if(nicoalert_getkeyname(key, keyname) != CMM_SUCCESS){
@@ -136,8 +139,10 @@ static void keyname_acq_thread(void *arg){
 
 // 自動取得処理の開始
 void con_start(void){
-    keyname_acq_nummsg(acq_dbidx.size(), true);
-    SetEvent(hConEvent);
+    if(ReadOptionInt(OPTION_AUTO_KEYNAME_ACQ, DEF_OPTION_AUTO_KEYNAME_ACQ)){
+        keyname_acq_nummsg(acq_dbidx.size(), true);
+        SetEvent(hConEvent);
+    }
 }
 
 // 自動取得処理キューに追加(IN: dbidx)
