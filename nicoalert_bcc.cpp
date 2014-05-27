@@ -147,7 +147,7 @@ static void bcc_check(int infotype, tstring &lvid, unsigned int idx[3]){
 
     // バルーン通知ビット
     if((notify & NOTIFY_BALLOON) && trd){
-        tstring msg;
+        tstring msg, msg2;
         switch(infotype){
         case INFOTYPE_OFFICIAL:
             msg += _T("[公式生放送]");
@@ -159,9 +159,10 @@ static void bcc_check(int infotype, tstring &lvid, unsigned int idx[3]){
             msg += _T("[ユーザー生放送]");
             break;
         }
+        msg2 = msg + _T(" ") + mrd.key_name + _T(" が放送開始しました。\n");
         //msg += _T("\n");
         msg = msg + _T(" (") + lvid + _T(")\n");
-        msg = msg + mrd.key_name + _T("(") + mrd.key + _T(") が放送開始しました。\n");
+        msg = msg + mrd.key_name + _T("(") + mrd.key + _T(")") + _T(" が放送開始しました。\n");
 
         if(infotype != INFOTYPE_OFFICIAL){
             // 公式生放送は取得エラーになるため取得しない
@@ -169,13 +170,15 @@ static void bcc_check(int infotype, tstring &lvid, unsigned int idx[3]){
             if(nicoalert_getstreaminfo(lvid, si) == CMM_SUCCESS){
                 msg = msg + _T("【") + si.title + _T("】\n");
                 msg = msg + si.desc + _T("\n");
+                msg2 = msg2 + si.title + _T("\n");
+                msg2 = msg2 + si.desc + _T("\n");
             }
         }
 
         // 棒読みちゃん
         if(ReadOptionInt(OPTION_BALLOON_BOUYOMI, DEF_OPTION_BALLOON_BOUYOMI)){
             _dbg(_T("bouyomi send start\n"));
-            nicoalert_bouyomi(msg);
+            nicoalert_bouyomi(msg2);
             _dbg(_T("bouyomi send end\n"));
         }
 

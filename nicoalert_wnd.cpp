@@ -55,11 +55,11 @@ static void InsertColumn(HWND hWndListView){
     HIMAGELIST himhd;
 
     himhd = ImageList_Create(ICO_SW, ICO_SH, ILC_COLOR32 | ILC_MASK, 4, 16);
-    ImageList_AddIcon(himhd, LoadIconRsc(_T("IDI_BALLOON")));
-    ImageList_AddIcon(himhd, LoadIconRsc(_T("IDI_BROWSER")));
-    ImageList_AddIcon(himhd, LoadIconRsc(_T("IDI_SOUND")));
-    ImageList_AddIcon(himhd, LoadIconRsc(_T("IDI_EXTAPP")));
-    ImageList_AddIcon(himhd, LoadIconRsc(_T("IDI_NOTIFY")));
+    ImageList_AddIcon(himhd, LoadIconRsc(IDI_BALLOON));
+    ImageList_AddIcon(himhd, LoadIconRsc(IDI_BROWSER));
+    ImageList_AddIcon(himhd, LoadIconRsc(IDI_SOUND));
+    ImageList_AddIcon(himhd, LoadIconRsc(IDI_EXTAPP));
+    ImageList_AddIcon(himhd, LoadIconRsc(IDI_NOTIFY));
     Header_SetImageList(ListView_GetHeader(hWndListView), himhd);
 
     int mask = LVCF_FMT | LVCF_WIDTH | LVCF_SUBITEM;
@@ -608,7 +608,7 @@ static BOOL CALLBACK RegAddDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp)
             SetEditBoxHook(GetDlgItem(hDlgWnd, IDC_RA_INPUT));
 
             // 登録ボタンにアイコン追加(Vista以上のみ有効)
-            SendMessage(GetDlgItem(hDlgWnd, IDC_RA_REGIST), BM_SETIMAGE, IMAGE_ICON, (LPARAM)LoadIconRsc(_T("IDI_BOOKMARK_PLUS")));
+            SendMessage(GetDlgItem(hDlgWnd, IDC_RA_REGIST), BM_SETIMAGE, IMAGE_ICON, (LPARAM)LoadIconRsc(IDI_BOOKMARK_PLUS));
 
             // ツールチップ表示データ登録
             if(ReadOptionInt(OPTION_TOOLTIP_HELP, DEF_OPTION_TOOLTIP_HELP)){
@@ -823,7 +823,7 @@ static BOOL CALLBACK RegSetDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp)
             SetDlgCheckbox(hDlgWnd, IDC_RS_CHECK_EXTAPP,  ntf[3]);
 
             // OKボタンにアイコン追加(Vista以上のみ有効)
-            SendMessage(GetDlgItem(hDlgWnd, IDC_RS_SAVE), BM_SETIMAGE, IMAGE_ICON, (LPARAM)LoadIconRsc(_T("IDI_TICK")));
+            SendMessage(GetDlgItem(hDlgWnd, IDC_RS_SAVE), BM_SETIMAGE, IMAGE_ICON, (LPARAM)LoadIconRsc(IDI_TICK));
 
             // ツールチップデータ登録
             if(ReadOptionInt(OPTION_TOOLTIP_HELP, DEF_OPTION_TOOLTIP_HELP)){
@@ -1024,7 +1024,7 @@ static BOOL CALLBACK SettingDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp
             HWND hWndTB = GetDlgItem(hDlgWnd, IDC_SE_SOUND_VOL);
             SendMessage(hWndTB, TBM_SETRANGE, FALSE, MAKELPARAM(0, 100));
             SendMessage(hWndTB, TBM_SETPOS, TRUE, ReadOptionInt(OPTION_SOUND_VOL, DEF_OPTION_SOUND_VOL));
-            SendMessage(GetDlgItem(hDlgWnd, IDC_SE_SOUND_PLAY), BM_SETIMAGE, IMAGE_ICON, (LPARAM)LoadIconRsc(_T("IDI_PLAY")));
+            SendMessage(GetDlgItem(hDlgWnd, IDC_SE_SOUND_PLAY), BM_SETIMAGE, IMAGE_ICON, (LPARAM)LoadIconRsc(IDI_PLAY));
 
             color_lsort_tx = ReadOptionInt(OPTION_LSORT_TXCOLOR, DEF_OPTION_LSORT_TXCOLOR);
             color_lsort_bg = ReadOptionInt(OPTION_LSORT_BGCOLOR, DEF_OPTION_LSORT_BGCOLOR);
@@ -1036,8 +1036,8 @@ static BOOL CALLBACK SettingDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp
             hBrushColor[3] = CreateSolidBrush(color_start_bg);
 
             // OKボタンにアイコン追加(Vista以上のみ有効)
-            SendMessage(GetDlgItem(hDlgWnd, IDC_SE_SAVE), BM_SETIMAGE, IMAGE_ICON, (LPARAM)LoadIconRsc(_T("IDI_TICK")));
-            SendMessage(GetDlgItem(hDlgWnd, IDC_SE_CANCEL), BM_SETIMAGE, IMAGE_ICON, (LPARAM)LoadIconRsc(_T("IDI_CROSS")));
+            SendMessage(GetDlgItem(hDlgWnd, IDC_SE_SAVE), BM_SETIMAGE, IMAGE_ICON, (LPARAM)LoadIconRsc(IDI_TICK));
+            SendMessage(GetDlgItem(hDlgWnd, IDC_SE_CANCEL), BM_SETIMAGE, IMAGE_ICON, (LPARAM)LoadIconRsc(IDI_CROSS));
 
             PostMessage(hDlgWnd, WM_COMMAND, IDC_SE_DEFAULT_BROWSER_USE, 0);
 
@@ -1657,7 +1657,7 @@ static void nawnd_initicon(HWND hWnd){
     nIcon.uID       = 0;
     nIcon.uFlags    = NIF_MESSAGE | NIF_ICON | NIF_TIP;
     nIcon.uCallbackMessage  = WM_TASKTRAY;
-    nIcon.hIcon     = LoadIconRsc(_T("IDI_NOTIFY"));
+    nIcon.hIcon     = LoadIconRsc(IDI_NOTIFY);
     _stprintf_s(nIcon.szTip, _T("%s %s"), PROGRAM_NAME, VERSION_STRING);
     nIcon.uTimeout = 30000;
     _tcscpy_s(nIcon.szInfoTitle, PROGRAM_NAME);
@@ -1715,7 +1715,7 @@ static void updatelvdb(HWND hWndListView, unsigned int dbidx){
 }
 
 // アイコンからビットマップへの変換(トラックメニューへアイコン追加用(Vista以上))
-HBITMAP CreateBmpFronIcon(HINSTANCE hInst, const TCHAR *icon){
+HBITMAP CreateBmpFronIcon(HINSTANCE hInst, WORD icon){
     HICON hIcon = LoadIconRsc(icon);
     if(!hIcon) return NULL;
 
@@ -1887,6 +1887,10 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                 SendMessage(hToolTipWnd, TTM_ACTIVATE, tip, 0);
             }
 
+            TCHAR bootmsgbuf[128];
+            _stprintf_s(bootmsgbuf, _T("%s %s : %s"), PROGRAM_NAME, VERSION_STRING, _T(UA_STRING));
+            msginfo_ind(bootmsgbuf);
+
             // 設定保存インターバルタイマ
             SetTimer(hDlgWnd, TID_SETTING, 5000, NULL);
 
@@ -1971,11 +1975,11 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                 // Vista以上のみ、トラックメニューにアイコン追加
                 HBITMAP hBmp1 = NULL, hBmp2 = NULL, hBmp3 = NULL;
                 if(GetOSVer() >= _WIN32_WINNT_VISTA){
-                    hBmp1 = CreateBmpFronIcon(hInst, _T("IDI_WRENCH"));
+                    hBmp1 = CreateBmpFronIcon(hInst, IDI_WRENCH);
                     SetMenuItemBitmaps(hSubmenu, IDM_SETTING, MF_BYCOMMAND, hBmp1, hBmp1);
-                    hBmp2 = CreateBmpFronIcon(hInst, _T("IDI_BOOKMARK_PLUS"));
+                    hBmp2 = CreateBmpFronIcon(hInst, IDI_BOOKMARK_PLUS);
                     SetMenuItemBitmaps(hSubmenu, IDM_REGADD, MF_BYCOMMAND, hBmp2, hBmp2);
-                    hBmp3 = CreateBmpFronIcon(hInst, _T("IDI_LABEL"));
+                    hBmp3 = CreateBmpFronIcon(hInst, IDI_LABEL);
                     SetMenuItemBitmaps(hSubmenu, IDM_LABELSET, MF_BYCOMMAND, hBmp3, hBmp3);
                 }
 
@@ -2017,6 +2021,32 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                     DeleteMenu(hSubmenu, IDM_OPEN_LV, MF_BYCOMMAND);
                     DeleteMenu(hSubmenu, IDM_OPEN_LV_CB, MF_BYCOMMAND);
                 }
+                
+                // ラベル追加/削除サブメニュー生成
+                int menunum = GetMenuItemCount(hSubmenu);
+                for(int menuidx = 0; menuidx < menunum; menuidx++){
+                    MENUITEMINFO mii;
+                    memset(&mii, 0, sizeof(mii));
+                    mii.cbSize = sizeof(mii);
+                    mii.fMask = MIIM_SUBMENU;
+                    if(GetMenuItemInfo(hSubmenu, menuidx, TRUE, &mii) && mii.hSubMenu){
+                        HMENU hSubSubMenu = mii.hSubMenu;
+                        mii.fMask = MIIM_ID;
+                        if(!GetMenuItemInfo(hSubSubMenu, 0, TRUE, &mii)) continue;
+                        if(mii.wID != IDM_LABELADD_ID_START && mii.wID != IDM_LABELDEL_ID_START) continue;
+                        UINT wIDstart = mii.wID;
+                        int menunums = GetMenuItemCount(hSubSubMenu);
+                        for(int labelid = 0; labelid < NICOALERT_LABEL_MAX; labelid++){
+                            TCHAR buf[NICOALERT_LABEL_LEN_MAX+1];
+                            tstring labelname = ReadLabelName(labelid);
+                            _tcscpy_s(buf, labelname.c_str());
+                            mii.wID = wIDstart + labelid;
+                            mii.fMask = MIIM_ID | MIIM_STRING;
+                            mii.dwTypeData = buf;
+                            InsertMenuItem(hSubSubMenu, menunums+labelid, TRUE, &mii);
+                        }
+                    }
+                }
 
                 // リストビュー右クリック トラックメニュー表示
                 ClientToScreen(hWndListView, &pt);
@@ -2054,7 +2084,7 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
 
         case IDC_LABELSET:
             if(HIWORD(wp) == STN_CLICKED){
-                // 登録追加アイコン押下
+                // ラベル設定アイコン押下
                 PostMessage(hDlgWnd, WM_COMMAND, IDM_LABELSET, 0);
             }
             break;
@@ -2174,7 +2204,7 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                     nadb.tr_commit();
 
                     // リストビューソートの反映
-                    PostMessage(hDlgWnd, WM_ALINFO_NOTIFY, 0, TRUE);
+                    PostMessage(hDlgWnd, WM_ALINFO_NOTIFY, 0, FALSE);
                 }
             }
             break;
@@ -2282,6 +2312,17 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
             break;
 
         default:
+            if(IDM_LABELADD_ID_START <= LOWORD(wp) && LOWORD(wp) < IDM_LABELADD_ID_START + NICOALERT_LABEL_MAX){
+                _dbg(_T("IDM_LABELADD_ID_START : wp=%08x lp = %08x"), wp, lp);
+                PostMessage(hDlgWnd, WM_LABELCTL, LABEL_ADD, LOWORD(wp) - IDM_LABELADD_ID_START);
+                break;
+            }
+            if(IDM_LABELDEL_ID_START <= LOWORD(wp) && LOWORD(wp) < IDM_LABELDEL_ID_START + NICOALERT_LABEL_MAX){
+                _dbg(_T("IDM_LABELDEL_ID_START : wp=%08x lp = %08x"), wp, lp);
+                PostMessage(hDlgWnd, WM_LABELCTL, LABEL_DEL, LOWORD(wp) - IDM_LABELDEL_ID_START);
+                break;
+            }
+
             return FALSE;
         }
         break;
@@ -2617,7 +2658,7 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                                     int x = 0, y = 0;
                                     if(width  >= ICO_SW){ x = (width  - ICO_SW) / 2; }
                                     if(height >= ICO_SH){ y = (height - ICO_SH) / 2; }
-                                    HICON hi = LoadIconRsc(_T("IDI_NOTIFY"));
+                                    HICON hi = LoadIconRsc(IDI_NOTIFY);
                                     DrawIconEx(lplvcd->nmcd.hdc, sirect.left + x, sirect.top + y, hi,
                                         ICO_SW, ICO_SH, 0, NULL, DI_NORMAL);
 
@@ -2740,12 +2781,7 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
             _dbg(_T("WM_LABELRELOAD\n"));
             // ラベル名読み出し
             for(int i = 0; i < NICOALERT_LABEL_MAX; i++){
-                TCHAR szLabelKey[64];
-                TCHAR szLabelNameDef[64];
-                _stprintf_s(szLabelKey, OPTION_LABEL_FORMAT, i+1);
-                _stprintf_s(szLabelNameDef, DEF_OPTION_LABEL_FORMAT, i+1);
-                tstring labelname = ReadOptionString(szLabelKey, szLabelNameDef);
-                sLabelName[i] = labelname;
+                sLabelName[i] = ReadLabelName(i);
             }
 
             LV_Lock(hWndListView);
@@ -2795,7 +2831,7 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
             nadb.tr_commit();
 
             // リストビューソートの反映
-            PostMessage(hDlgWnd, WM_ALINFO_NOTIFY, 0, TRUE);
+            PostMessage(hDlgWnd, WM_ALINFO_NOTIFY, 0, FALSE);
         }
         break;
 

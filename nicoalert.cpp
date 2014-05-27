@@ -182,10 +182,20 @@ void DeleteOption(const TCHAR *key){
     setting_info.unlock();
 }
 
+// ラベル名読み出し
+tstring ReadLabelName(unsigned int labelid){
+    TCHAR szLabelKey[64];
+    TCHAR szLabelNameDef[64];
+    tstring labelname;
+    _stprintf_s(szLabelKey, OPTION_LABEL_FORMAT, labelid+1);
+    _stprintf_s(szLabelNameDef, DEF_OPTION_LABEL_FORMAT, labelid+1);
+    return ReadOptionString(szLabelKey, szLabelNameDef);
+}
+
 
 // アイコンリソース読み出し
-HICON LoadIconRsc(const TCHAR *res){
-    return (HICON)LoadImage(hInst, res, IMAGE_ICON, 0, 0, LR_DEFAULTCOLOR | LR_SHARED);
+HICON LoadIconRsc(WORD resid){
+    return (HICON)LoadImage(hInst, MAKEINTRESOURCE (resid), IMAGE_ICON, 0, 0, LR_DEFAULTCOLOR | LR_SHARED);
 }
 
 // OSバージョン取得(WINNT系列のみ)

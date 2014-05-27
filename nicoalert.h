@@ -130,8 +130,9 @@ unsigned int ReadOptionInt(const TCHAR *key, unsigned int default_val);
 void SaveOptionString(const TCHAR *key, const TCHAR *value);
 void SaveOptionInt(const TCHAR *key, unsigned int value);
 void DeleteOption(const TCHAR *key);
+tstring ReadLabelName(unsigned int labelid);
 
-HICON LoadIconRsc(const TCHAR *res);
+HICON LoadIconRsc(WORD resid);
 unsigned int GetOSVer(void);
 bool CopyToClipBoard(const TCHAR *str);
 bool WindowSubClass(HWND hWnd, FARPROC HookProc);
@@ -236,6 +237,12 @@ bool WindowSubClass(HWND hWnd, FARPROC HookProc);
 #define DEF_OPTION_START_BGCOLOR        0xD0D0FF    // BBGGRR
 #define DEF_OPTION_LSORT_TXCOLOR        0x000000    // BBGGRR
 #define DEF_OPTION_LSORT_BGCOLOR        0xFFE0E0    // BBGGRR
+
+// ラベル設定
+#define OPTION_LABEL_FORMAT             _T("label_name_%02u")
+#define DEF_OPTION_LABEL_FORMAT         _T("ラベル %02u")
+#define NICOALERT_LABEL_MAX             16  // ラベル数
+#define NICOALERT_LABEL_LEN_MAX         16  // ラベル最大文字数
 
 // データ登録設定
 #define OPTION_RA_ANMODE                _T("ra_anmode")

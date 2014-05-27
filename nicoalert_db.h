@@ -3,7 +3,7 @@
 #define NICOALERT_DB_H
 
 #include "nicoalert.h"
-#include "sqlite3.h"
+#include "sqlite3/sqlite3.h"
 
 //#pragma comment(lib, "sqlite3.lib")
 

@@ -74,3 +74,16 @@
 #define IDM_OPEN_LV_CB                          40013
 #define IDM_HELP                                40014
 #define IDM_LABELSET                            40015
+#define IDM_LABELADD_ID_START                   40100
+#define IDM_LABELDEL_ID_START                   40200
+#define IDI_BALLOON                             50000
+#define IDI_BOOKMARK_PLUS                       50001
+#define IDI_BROWSER                             50002
+#define IDI_CROSS                               50003
+#define IDI_EXTAPP                              50004
+#define IDI_LABEL                               50005
+#define IDI_NOTIFY                              50006
+#define IDI_PLAY                                50007
+#define IDI_SOUND                               50008
+#define IDI_TICK                                50009
+#define IDI_WRENCH                              50010

@@ -5,8 +5,7 @@
 #include "nicoalert_label.h"
 #include "nicoalert_wnd.h"
 
-// 編集中ラベル名保持データ
-static HWND hDlg;
+// ダイアログ表示中ハンドル
 HWND hWndLabelDlg;
 
 // リストビュー用カラムデータ
@@ -49,8 +48,6 @@ static void InsertColumn(HWND hWndListView){
 static void UpdateListViewAll(HWND hWndListView){
 
     LV_ITEM item;
-    TCHAR szLabelKey[64];
-    TCHAR szLabelNameDef[64];
     TCHAR szStringBuffer[LISTVIEW_STRINGBUFFER];
 
     LockWindowUpdate(hWndListView);
@@ -58,10 +55,7 @@ static void UpdateListViewAll(HWND hWndListView){
 
     tstring labelname;
     for(int i = 0; i < NICOALERT_LABEL_MAX; i++){
-        _stprintf_s(szLabelKey, OPTION_LABEL_FORMAT, i+1);
-        _stprintf_s(szLabelNameDef, DEF_OPTION_LABEL_FORMAT, i+1);
-        labelname = ReadOptionString(szLabelKey, szLabelNameDef);
-
+        labelname = ReadLabelName(i);
         _stprintf_s(szStringBuffer, _T("%s"), labelname.c_str());
 
         item.iItem = i;
@@ -127,7 +121,7 @@ BOOL CALLBACK LabelSetDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
     switch (msg) {
     case WM_INITDIALOG:
         {
-            hDlg = hDlgWnd;
+            hWndLabelDlg = hDlgWnd;
 
             hWndListView = GetDlgItem(hDlgWnd, IDC_LS_LISTVIEW);
 
@@ -143,8 +137,8 @@ BOOL CALLBACK LabelSetDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
             ListView_SetItemState(hWndListView, 0, LVIS_SELECTED, LVIS_SELECTED);
 
             // ボタンにアイコン追加(Vista以上のみ有効)
-            SendMessage(GetDlgItem(hDlgWnd, IDC_LS_LABELSET), BM_SETIMAGE, IMAGE_ICON, (LPARAM)LoadIconRsc(_T("IDI_TICK")));
-            SendMessage(GetDlgItem(hDlgWnd, IDC_LS_LABELUNSET), BM_SETIMAGE, IMAGE_ICON, (LPARAM)LoadIconRsc(_T("IDI_CROSS")));
+            SendMessage(GetDlgItem(hDlgWnd, IDC_LS_LABELSET), BM_SETIMAGE, IMAGE_ICON, (LPARAM)LoadIconRsc(IDI_TICK));
+            SendMessage(GetDlgItem(hDlgWnd, IDC_LS_LABELUNSET), BM_SETIMAGE, IMAGE_ICON, (LPARAM)LoadIconRsc(IDI_CROSS));
 
             // ツールチップデータ登録
             if(ReadOptionInt(OPTION_TOOLTIP_HELP, DEF_OPTION_TOOLTIP_HELP)){
@@ -226,8 +220,7 @@ BOOL CALLBACK LabelSetDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
 
     case WM_SYSCOMMAND:
         if (wp == SC_CLOSE){
-            // 変更なしを通知してダイアログ終了
-            EndDialog(hDlgWnd, FALSE);
+            DestroyWindow(hDlgWnd);
             break;
         }
 

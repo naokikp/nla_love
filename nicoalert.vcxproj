@@ -93,7 +93,6 @@ c:\tools\upx\upx.exe $(SolutionDir)\$(TargetFileName)</Command>
     <ClInclude Include="nicoalert_ver.h" />
     <ClInclude Include="nicoalert_wnd.h" />
     <ClInclude Include="resource.h" />
-    <ClInclude Include="sqlite3.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="resource.rc" />
@@ -109,7 +108,7 @@ c:\tools\upx\upx.exe $(SolutionDir)\$(TargetFileName)</Command>
     <ClCompile Include="nicoalert_ole.cpp" />
     <ClCompile Include="nicoalert_snd.cpp" />
     <ClCompile Include="nicoalert_wnd.cpp" />
-    <ClCompile Include="sqlite3.c" />
+    <ClCompile Include="sqlite3\sqlite3.c" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
