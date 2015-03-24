@@ -12,6 +12,7 @@
 #include <set>
 #include <vector>
 #include <unordered_map>
+#include <algorithm>
 
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -260,6 +261,7 @@ bool WindowSubClass(HWND hWnd, FARPROC HookProc);
 enum TIMERID {
     TID_SETTING = 0,
     TID_MINIMIZE,
+    TID_REDRAW,
 };
 
 enum COLINDEX {

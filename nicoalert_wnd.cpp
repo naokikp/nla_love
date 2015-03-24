@@ -15,6 +15,7 @@ static HWND hWndListView;
 static HACCEL hAccel = NULL;
 static HHOOK HHook;
 static FARPROC Org_WndProc_Listview;
+static deque_ts<time_t> RedrawTimer;
 
 static class nicoalert_db nadb;
 static void msginfo_ind(const TCHAR *msg);
@@ -311,6 +312,65 @@ static bool CloseDataBase(){
     return nadb.close();
 }
 
+// 再描画タイマ設定(放送開始30分以内のカラーリング消去)
+static void SetRedrawTimer(HWND hWnd){
+    time_t now = time(NULL);
+    RedrawTimer.lock();
+    while(!RedrawTimer.empty() && RedrawTimer.front() <= now){
+        RedrawTimer.pop_front();
+    }
+    _dbg(_T("SetRedrawTimer : timer count = %u\n"), RedrawTimer.size());
+    if(!RedrawTimer.empty()){
+        time_t t = RedrawTimer.front() - now + 1;
+        SetTimer(hWnd, TID_REDRAW, (UINT)(t * 1000), NULL);
+        _dbg(_T("SetRedrawTimer : settimer %u\n"), t * 1000);
+    } else {
+        KillTimer(hWnd, TID_REDRAW);
+        _dbg(_T("SetRedrawTimer : killtimer\n"));
+    }
+
+    RedrawTimer.unlock();
+}
+
+static void InitRedrawTimer(HWND hWnd){
+    time_t now = time(NULL);
+    regdata_info.lock();
+    RedrawTimer.lock();
+    FOREACH(it, regdata_info){
+        time_t t = it->second.last_start + BROADCAST_PERIOD;
+        if(t > now) RedrawTimer.push_back(t);
+    }
+    sort(RedrawTimer.begin(), RedrawTimer.end());
+    _dbg(_T("InitRedrawTimer : timer count = %u\n"), RedrawTimer.size());
+    RedrawTimer.unlock();
+    regdata_info.unlock();
+
+    SetRedrawTimer(hWnd);
+}
+
+static void AddRedrawTimer(HWND hWnd, unsigned int dbidx){
+    time_t now = time(NULL);
+    regdata_info.lock();
+    do {
+        if(dbidx <= 0) break;
+
+        ITER(regdata_info) it = regdata_info.find(dbidx);
+        if(it == regdata_info.end()) break;
+        c_regdata &rd = it->second;
+        if(rd.idx != dbidx) break;
+
+        RedrawTimer.lock();
+        time_t t = rd.last_start + BROADCAST_PERIOD;
+        if(t > now) RedrawTimer.push_back(t);
+        _dbg(_T("AddRedrawTimer : timer count = %u\n"), RedrawTimer.size());
+        RedrawTimer.unlock();
+
+    } while(0);
+    regdata_info.unlock();
+
+    SetRedrawTimer(hWnd);
+}
+
 // ツールチップウィンドウ初期化
 HWND ToolTipInit(HWND hDlgWnd, HINSTANCE hInstance, const ToolTipInfo *tti, int num){
     // ツールチップウィンドウ生成
@@ -372,6 +432,16 @@ class CKeySort : public std::binary_function< tstring, tstring, bool > {
     }
 };
 
+bool getidnum(const TCHAR *p, unsigned long &idnum){
+    if(!_istdigit(p[0])) return false;
+
+    errno = 0;
+    unsigned long num = _tcstoul(p, NULL, 10);
+    if(idnum == ULONG_MAX && errno == ERANGE) return false;
+    idnum = num;
+    return true;
+}
+
 // 登録情報の分析 抽出できた個数を返す
 static unsigned int RegistrationInfoAnalyse(vector<TCHAR> &inout, BOOL anmode, HWND hWndMsg){
     unsigned int len = inout.size();
@@ -381,9 +451,7 @@ static unsigned int RegistrationInfoAnalyse(vector<TCHAR> &inout, BOOL anmode, H
     set<tstring, CKeySort> reginfo;
 
     for(unsigned int i = 0; i < len; i++){
-        if(!_istalnum(buf[i]) && buf[i] != '/'){
-            buf[i] = ' ';
-        }
+        if(!_istalnum(buf[i]) && buf[i] != '/') buf[i] = _T(' ');
     }
 
     // 入力文字列からトークン分解して登録可能なキーを抽出 → reginfoに一時保存
@@ -397,14 +465,11 @@ static unsigned int RegistrationInfoAnalyse(vector<TCHAR> &inout, BOOL anmode, H
             if(_tcslen(p) <= prefixlen) continue;
             TCHAR tbuf[64], *q = p;
             while((q = _tcsstr(q, checkstr[i])) != NULL){
-                errno = 0;
-                unsigned long idnum = _tcstoul(q + prefixlen, NULL, 10);
-                if(idnum != ULONG_MAX || errno != ERANGE){
-                    if(idnum > 0){
-                        _stprintf_s(tbuf, _T("%s%lu"), checkstr[i], idnum);
-                        reginfo.insert(tbuf);
-                        ismatch = true;
-                    }
+                unsigned long idnum = 0;
+                if(getidnum(q + prefixlen, idnum)){
+                    _stprintf_s(tbuf, _T("%s%lu"), checkstr[i], idnum);
+                    reginfo.insert(tbuf);
+                    ismatch = true;
                 }
                 q++;
             }
@@ -417,13 +482,10 @@ static unsigned int RegistrationInfoAnalyse(vector<TCHAR> &inout, BOOL anmode, H
             }
             if(i == len){
                 TCHAR tbuf[64];
-                errno = 0;
-                unsigned long idnum = _tcstoul(p, NULL, 10);
-                if(idnum != ULONG_MAX || errno != ERANGE){
-                    if(idnum > 0){
-                        _stprintf_s(tbuf, _T("%s%lu"), _T(USERID_PREFIX), idnum);
-                        reginfo.insert(tbuf);
-                    }
+                unsigned long idnum = 0;
+                if(getidnum(p, idnum)){
+                    _stprintf_s(tbuf, _T("%s%lu"), _T(USERID_PREFIX), idnum);
+                    reginfo.insert(tbuf);
                 }
             }
         }
@@ -488,10 +550,9 @@ static unsigned int Registration(TCHAR *buf){
             if(_tcslen(p) <= prefixlen) continue;
             TCHAR tbuf[64];
             if(_tcsncmp(p, checkstr[i], prefixlen) != 0) continue;
-            errno = 0;
-            unsigned long idnum = _tcstoul(p + prefixlen, NULL, 10);
 
-            if(idnum != ULONG_MAX || errno != ERANGE){
+            unsigned long idnum = 0;
+            if(getidnum(p + prefixlen, idnum)){
                 c_regdata rd;
 
                 _stprintf_s(tbuf, _T("%s%lu"), checkstr[i], idnum);
@@ -1773,6 +1834,9 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                 return FALSE;
             }
 
+            // 再描画タイマ設定
+            InitRedrawTimer(hDlgWnd);
+
 #ifdef _DEBUG
             setting_info.lock();
             FOREACH(it, setting_info){
@@ -2105,8 +2169,8 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                     SendMessage(hToolTipWnd, TTM_ACTIVATE, tip, 0); 
 
                     // カラー変更を反映
-                    InvalidateRect(hDlgWnd, NULL, FALSE);
-                    UpdateWindow(hDlgWnd);
+                    InvalidateRect(hWndListView, NULL, FALSE);
+                    UpdateWindow(hWndListView);
 
                     // 自動キー名取得処理ON/OFFを反映
                     if(ReadOptionInt(OPTION_AUTO_KEYNAME_ACQ, DEF_OPTION_AUTO_KEYNAME_ACQ)){
@@ -2333,7 +2397,10 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
             unsigned int dbidx = (unsigned int)wp;
             BOOL lvUpdate = (BOOL)lp;
 
-            if(dbidx) updatelvdb(hWndListView, dbidx);
+            if(dbidx){
+                updatelvdb(hWndListView, dbidx);
+                AddRedrawTimer(hDlgWnd, dbidx);
+            }
 
             if(lvUpdate){
                 // ソート条件を設定してソート実行
@@ -2431,14 +2498,14 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                 /* ヘッダクリック */
                 if(pnmhdr->code == LVN_COLUMNCLICK){
                     NMLISTVIEW *pnmlv = (NMLISTVIEW *)lp;
-                    int rev = 0;
-                    if(iSortedIdx == (pnmlv->iSubItem+1)){
-                        rev = 1;
-                        iSortedIdx = -(pnmlv->iSubItem+1);
-                    } else if(iSortedIdx == -(pnmlv->iSubItem+1)){
+                    int iSubItem = pnmlv->iSubItem+1;
+
+                    if(iSortedIdx == iSubItem){
+                        iSortedIdx = -iSortedIdx;
+                    } else if(iSortedIdx == -iSubItem){
                         iSortedIdx = 0;
                     } else {
-                        iSortedIdx = (pnmlv->iSubItem+1);
+                        iSortedIdx = iSubItem;
                     }
 
                     SaveOptionInt(OPTION_SORT_INDEX, iSortedIdx);
@@ -2911,8 +2978,9 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
             SetWindowPos(GetDlgItem(hDlgWnd, IDC_WRENCH), NULL, nWidth - ICO_BORDER_SW*2, 0, 0, 0, SWP_NOZORDER | SWP_NOSIZE/* | SWP_NOCOPYBITS */);
             SetWindowPos(GetDlgItem(hDlgWnd, IDC_BOOKMARK_PLUS), NULL, nWidth - ICO_BORDER_SW, 0, 0, 0, SWP_NOZORDER | SWP_NOSIZE/* | SWP_NOCOPYBITS */);
 #else
-            HDWP hDWP = BeginDeferWindowPos(4);
+            HDWP hDWP = BeginDeferWindowPos(5);
             DeferWindowPos(hDWP, hWndListView, NULL, 0, STATUS_BAR_SIZE, nWidth, nHeight-STATUS_BAR_SIZE, SWP_NOZORDER);
+            DeferWindowPos(hDWP, GetDlgItem(hDlgWnd, IDC_MSG),           NULL, ICO_BORDER_SW, 0, nWidth - ICO_BORDER_SW*4, STATUS_BAR_SIZE, SWP_NOZORDER);
             DeferWindowPos(hDWP, GetDlgItem(hDlgWnd, IDC_WRENCH),        NULL, nWidth - ICO_BORDER_SW*3, 0, 0, 0, SWP_NOZORDER | SWP_NOSIZE | SWP_NOCOPYBITS );
             DeferWindowPos(hDWP, GetDlgItem(hDlgWnd, IDC_BOOKMARK_PLUS), NULL, nWidth - ICO_BORDER_SW*2, 0, 0, 0, SWP_NOZORDER | SWP_NOSIZE | SWP_NOCOPYBITS );
             DeferWindowPos(hDWP, GetDlgItem(hDlgWnd, IDC_LABELSET),      NULL, nWidth - ICO_BORDER_SW*1, 0, 0, 0, SWP_NOZORDER | SWP_NOSIZE | SWP_NOCOPYBITS );
@@ -3038,7 +3106,15 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
             KillTimer(hDlgWnd, TID_MINIMIZE);
             ShowWindow(hDlgWnd, SW_HIDE);
             break;
+
+        case TID_REDRAW:
+            InvalidateRect(hWndListView, NULL, FALSE);
+            UpdateWindow(hWndListView);
+            SetRedrawTimer(hDlgWnd);
+            break;
+
         }
+
         break;
 
     default:

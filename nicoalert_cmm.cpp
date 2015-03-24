@@ -228,6 +228,7 @@ bool xml_alertinfo(char *xmlbody, c_alertinfo *ai){
     }
 
     ai->infotype = INFOTYPE_OFFICIAL;
+    ai->usrid = _T(USERID_PREFIX) _T("0");
     return true;
 }
 

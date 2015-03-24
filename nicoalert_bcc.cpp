@@ -173,7 +173,24 @@ static void bcc_check(int infotype, tstring &lvid, unsigned int idx[3]){
                 msg2 = msg2 + si.title + _T("\n");
                 msg2 = msg2 + si.desc + _T("\n");
             }
+        } else {
+            // lv指定じゃない公式生放送は放送ページからタイトルを取得
+            if(mrd.key.substr(0, LVID_PREFIX_LEN) != _T(LVID_PREFIX)){
+                int failcnt = 0;
+                tstring keyname;
+                while(1){
+                    if(nicoalert_getkeyname(lvid, keyname) == CMM_SUCCESS) break;
+                    keyname = _T("放送タイトル取得に失敗しました。");
+                    //callback_msginfo(keyname.c_str());
+                    failcnt++;
+                    if(failcnt >= 5) break;
+                    Sleep(1000);
+                }
+                msg = msg + _T("【") + keyname + _T("】\n");
+                msg2 = msg2 + keyname + _T("\n");
+            }
         }
+        callback_msginfo(msg2.c_str());
 
         // 棒読みちゃん
         if(ReadOptionInt(OPTION_BALLOON_BOUYOMI, DEF_OPTION_BALLOON_BOUYOMI)){
@@ -259,29 +276,27 @@ static void bcc_check_thread(void *arg){
             regdata_hash.lock();
 
             // アラート通知種別ごとに登録キーをチェック
-            //  公式生:       放送番号
+            //  公式生:       放送番号、ユーザID = user/0
             //  チャンネル生: 放送番号、チャンネル番号、ユーザID
             //  ユーザー生:   放送番号、コミュニティ番号、ユーザID
             ITER(regdata_hash) it;
+            it = regdata_hash.find(ai.lvid);
+            if(it != regdata_hash.end()) idx[0] = it->second;
+            it = regdata_hash.find(ai.usrid);
+            if(it != regdata_hash.end()) idx[1] = it->second;
+
             switch(ai.infotype){
             case INFOTYPE_OFFICIAL:
                 break;
             case INFOTYPE_CHANNEL:
-                it = regdata_hash.find(ai.usrid);
-                if(it != regdata_hash.end()) idx[1] = it->second;
                 it = regdata_hash.find(ai.chid);
                 if(it != regdata_hash.end()) idx[2] = it->second;
                 break;
             case INFOTYPE_USER:
-                it = regdata_hash.find(ai.usrid);
-                if(it != regdata_hash.end()) idx[1] = it->second;
                 it = regdata_hash.find(ai.coid);
                 if(it != regdata_hash.end()) idx[2] = it->second;
                 break;
             }
-
-            it = regdata_hash.find(ai.lvid);
-            if(it != regdata_hash.end()) idx[0] = it->second;
 
             regdata_hash.unlock();
 
