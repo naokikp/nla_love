@@ -214,10 +214,14 @@ bool WindowSubClass(HWND hWnd, FARPROC HookProc);
 #define OPTION_AUTO_KEYNAME_ACQ         _T("auto_keyname_acq")
 #define OPTION_BALLOON_BOUYOMI          _T("balloon_bouyomi")
 #define OPTION_TOOLTIP_HELP             _T("tooltip_help")
+#define OPTION_ITEM_DC_ENABLE           _T("item_dc_enable")
+#define OPTION_ITEM_DC_SELECT           _T("item_dc_select")
 #define DEF_OPTION_BALLOON_OPEN         0
 #define DEF_OPTION_AUTO_KEYNAME_ACQ     1
 #define DEF_OPTION_BALLOON_BOUYOMI      0
 #define DEF_OPTION_TOOLTIP_HELP         1
+#define DEF_OPTION_ITEM_DC_ENABLE       0
+#define DEF_OPTION_ITEM_DC_SELECT       0
 
 #define OPTION_DEFAULT_NOTIFY           _T("default_notify") 
 #define OPTION_BROWSER_PATH             _T("browser_path")

@@ -52,6 +52,10 @@
 #define IDC_SE_EXTAPP_REF                       5038
 #define IDC_SE_CANCEL                           5040
 #define IDC_SE_SAVE                             5041
+#define IDC_SE_ITEM_DC_ENABLE                   5050
+#define IDC_SE_ITEM_DC_ITEMSETTING              5051
+#define IDC_SE_ITEM_DC_OPEN_LV                  5052
+#define IDC_SE_ITEM_DC_OPEN_ID                  5053
 #define IDC_MI_MSG                              6000
 #define IDC_LS_LISTVIEW                         7000
 #define IDC_LS_LABELSET                         7001
@@ -74,6 +78,7 @@
 #define IDM_OPEN_LV_CB                          40013
 #define IDM_HELP                                40014
 #define IDM_LABELSET                            40015
+#define IDM_VERSION                             40016
 #define IDM_LABELADD_ID_START                   40100
 #define IDM_LABELDEL_ID_START                   40200
 #define IDI_BALLOON                             50000

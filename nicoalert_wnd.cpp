@@ -1065,6 +1065,12 @@ static BOOL CALLBACK SettingDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp
             CheckDlgButton(hDlgWnd, IDC_SE_BALLOON_BOUYOMI,   ReadOptionInt(OPTION_BALLOON_BOUYOMI,   DEF_OPTION_BALLOON_BOUYOMI));
             CheckDlgButton(hDlgWnd, IDC_SE_AUTO_KEYNAME_ACQ,  ReadOptionInt(OPTION_AUTO_KEYNAME_ACQ,  DEF_OPTION_AUTO_KEYNAME_ACQ));
             CheckDlgButton(hDlgWnd, IDC_SE_TOOLTIP_HELP,      ReadOptionInt(OPTION_TOOLTIP_HELP,      DEF_OPTION_TOOLTIP_HELP));
+            CheckDlgButton(hDlgWnd, IDC_SE_ITEM_DC_ENABLE,    ReadOptionInt(OPTION_ITEM_DC_ENABLE,    DEF_OPTION_ITEM_DC_ENABLE));
+
+            int item_dc_select = ReadOptionInt(OPTION_ITEM_DC_SELECT, DEF_OPTION_ITEM_DC_SELECT);
+            CheckDlgButton(hDlgWnd, IDC_SE_ITEM_DC_ITEMSETTING, item_dc_select == 0);
+            CheckDlgButton(hDlgWnd, IDC_SE_ITEM_DC_OPEN_LV,     item_dc_select == 1);
+            CheckDlgButton(hDlgWnd, IDC_SE_ITEM_DC_OPEN_ID,     item_dc_select == 2);
 
             unsigned int notify = ReadOptionInt(OPTION_DEFAULT_NOTIFY, DEF_OPTION_DEFAULT_NOTIFY);
             CheckDlgButton(hDlgWnd, IDC_SE_CHECK_BALLOON, (notify & NOTIFY_BALLOON)?TRUE:FALSE);
@@ -1101,6 +1107,7 @@ static BOOL CALLBACK SettingDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp
             SendMessage(GetDlgItem(hDlgWnd, IDC_SE_CANCEL), BM_SETIMAGE, IMAGE_ICON, (LPARAM)LoadIconRsc(IDI_CROSS));
 
             PostMessage(hDlgWnd, WM_COMMAND, IDC_SE_DEFAULT_BROWSER_USE, 0);
+            PostMessage(hDlgWnd, WM_COMMAND, IDC_SE_ITEM_DC_ENABLE, 0);
 
             // ツールチップデータ登録
             if(ReadOptionInt(OPTION_TOOLTIP_HELP, DEF_OPTION_TOOLTIP_HELP)){
@@ -1113,6 +1120,7 @@ static BOOL CALLBACK SettingDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp
                     { IDC_SE_BALLOON_BOUYOMI,       _T("バルーン通知設定がされた放送開始時に、音声読み上げを行います。\n(棒読みちゃんが起動されている必要があります)") },
                     { IDC_SE_AUTO_KEYNAME_ACQ,      _T("コミュニティ、チャンネル、放送番号の登録時に、登録名を自動的に取得します。\n既に手動で入力されていた場合は取得しません。") },
                     { IDC_SE_TOOLTIP_HELP,          _T("チェックボックス、ボタン等にマウスカーソルを合わせた際に説明を表示します。") },
+                    { IDC_SE_ITEM_DC_ENABLE,        _T("登録アイテムをダブルクリックした際の動作を設定します。") },
                     { IDC_SE_CHECK_BALLOON,         _T("放送開始時にバルーンを表示します。") },
                     { IDC_SE_CHECK_BROWSER,         _T("放送開始時にブラウザで放送ページを開きます。") },
                     { IDC_SE_CHECK_SOUND,           _T("放送開始時にサウンドファイルを再生します。") },
@@ -1151,6 +1159,12 @@ static BOOL CALLBACK SettingDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp
                 SaveOptionInt(OPTION_BALLOON_BOUYOMI,   IsDlgButtonChecked(hDlgWnd, IDC_SE_BALLOON_BOUYOMI));
                 SaveOptionInt(OPTION_AUTO_KEYNAME_ACQ,  IsDlgButtonChecked(hDlgWnd, IDC_SE_AUTO_KEYNAME_ACQ));
                 SaveOptionInt(OPTION_TOOLTIP_HELP,      IsDlgButtonChecked(hDlgWnd, IDC_SE_TOOLTIP_HELP));
+                SaveOptionInt(OPTION_ITEM_DC_ENABLE,    IsDlgButtonChecked(hDlgWnd, IDC_SE_ITEM_DC_ENABLE));
+
+                int item_dc_select =
+                    IsDlgButtonChecked(hDlgWnd, IDC_SE_ITEM_DC_OPEN_LV) ? 1 :
+                    IsDlgButtonChecked(hDlgWnd, IDC_SE_ITEM_DC_OPEN_ID) ? 2 : 0;
+                SaveOptionInt(OPTION_ITEM_DC_SELECT, item_dc_select);
 
                 SaveOptionInt(OPTION_LSORT_TXCOLOR, color_lsort_tx);
                 SaveOptionInt(OPTION_LSORT_BGCOLOR, color_lsort_bg);
@@ -1191,6 +1205,15 @@ static BOOL CALLBACK SettingDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp
                 BOOL fCheck = IsDlgButtonChecked(hDlgWnd, IDC_SE_DEFAULT_BROWSER_USE);
                 EnableWindow(GetDlgItem(hDlgWnd, IDC_SE_BROWSER_PATH), !fCheck);
                 EnableWindow(GetDlgItem(hDlgWnd, IDC_SE_BROWSER_REF), !fCheck);
+            }
+            break;
+
+        case IDC_SE_ITEM_DC_ENABLE:
+            {
+                BOOL fCheck = IsDlgButtonChecked(hDlgWnd, IDC_SE_ITEM_DC_ENABLE);
+                EnableWindow(GetDlgItem(hDlgWnd, IDC_SE_ITEM_DC_ITEMSETTING), fCheck);
+                EnableWindow(GetDlgItem(hDlgWnd, IDC_SE_ITEM_DC_OPEN_LV), fCheck);
+                EnableWindow(GetDlgItem(hDlgWnd, IDC_SE_ITEM_DC_OPEN_ID), fCheck);
             }
             break;
 
@@ -1814,10 +1837,12 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
 	static IDropTarget *pDropTarget = NULL;
     static tstring sLabelName[NICOALERT_LABEL_MAX];
 
-    static unsigned int start_bc_color_tx = 0;
-    static unsigned int start_bc_color_bg = 0;
-    static unsigned int start_sort_color_tx = 0;
-    static unsigned int start_sort_color_bg = 0;
+    static unsigned int default_color_tx = RGB(0,0,0);
+    static unsigned int default_color_bg = RGB(255,255,255);
+    static unsigned int startbc_color_tx = 0;
+    static unsigned int startbc_color_bg = 0;
+    static unsigned int sortcol_color_tx = 0;
+    static unsigned int sortcol_color_bg = 0;
 
     switch(msg) {
     case WM_INITDIALOG:
@@ -1976,10 +2001,10 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
             }
 
             // カラー情報を保持
-            start_bc_color_tx  = ReadOptionInt(OPTION_START_TXCOLOR, DEF_OPTION_START_TXCOLOR);
-            start_bc_color_bg  = ReadOptionInt(OPTION_START_BGCOLOR, DEF_OPTION_START_BGCOLOR);
-            start_sort_color_tx = ReadOptionInt(OPTION_LSORT_TXCOLOR, DEF_OPTION_LSORT_TXCOLOR);
-            start_sort_color_bg = ReadOptionInt(OPTION_LSORT_BGCOLOR, DEF_OPTION_LSORT_BGCOLOR);
+            startbc_color_tx  = ReadOptionInt(OPTION_START_TXCOLOR, DEF_OPTION_START_TXCOLOR);
+            startbc_color_bg  = ReadOptionInt(OPTION_START_BGCOLOR, DEF_OPTION_START_BGCOLOR);
+            sortcol_color_tx = ReadOptionInt(OPTION_LSORT_TXCOLOR, DEF_OPTION_LSORT_TXCOLOR);
+            sortcol_color_bg = ReadOptionInt(OPTION_LSORT_BGCOLOR, DEF_OPTION_LSORT_BGCOLOR);
 
             initializing = false;
 
@@ -2159,10 +2184,10 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                 // 全体設定ダイアログ起動
                 if(DialogBox(hInst, _T("DIALOG_SETTING"), hDlgWnd, SettingDlgProc)){
                     // 保存時
-                    start_bc_color_tx  = ReadOptionInt(OPTION_START_TXCOLOR, DEF_OPTION_START_TXCOLOR);
-                    start_bc_color_bg  = ReadOptionInt(OPTION_START_BGCOLOR, DEF_OPTION_START_BGCOLOR);
-                    start_sort_color_tx = ReadOptionInt(OPTION_LSORT_TXCOLOR, DEF_OPTION_LSORT_TXCOLOR);
-                    start_sort_color_bg = ReadOptionInt(OPTION_LSORT_BGCOLOR, DEF_OPTION_LSORT_BGCOLOR);
+                    startbc_color_tx  = ReadOptionInt(OPTION_START_TXCOLOR, DEF_OPTION_START_TXCOLOR);
+                    startbc_color_bg  = ReadOptionInt(OPTION_START_BGCOLOR, DEF_OPTION_START_BGCOLOR);
+                    sortcol_color_tx = ReadOptionInt(OPTION_LSORT_TXCOLOR, DEF_OPTION_LSORT_TXCOLOR);
+                    sortcol_color_bg = ReadOptionInt(OPTION_LSORT_BGCOLOR, DEF_OPTION_LSORT_BGCOLOR);
 
                     // ツールチップ表示ON/OFFを反映
                     BOOL tip = ReadOptionInt(OPTION_TOOLTIP_HELP, DEF_OPTION_TOOLTIP_HELP)?TRUE:FALSE;
@@ -2324,6 +2349,12 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
             ShowWindow(hDlgWnd, SW_RESTORE);
             SetForegroundWindow(hDlgWnd);
             SetFocus(hDlgWnd);
+            break;
+
+        case IDM_VERSION:
+            MessageBox(hDlgWnd,
+                PROGRAM_NAME _T(" ") VERSION_STRING _T(" - ") VERSION_LIC _T("\n\n")
+                _T("User-Agent: ") _T(UA_STRING) _T("\n"), _T("バージョン情報"), MB_OK);
             break;
 
         case IDM_EXIT:
@@ -2656,6 +2687,9 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                             item.iItem = lplvcd->nmcd.dwItemSpec;
                             item.iSubItem = 0;
                             item.mask = LVIF_PARAM;
+
+                            lplvcd->clrText   = default_color_tx;
+                            lplvcd->clrTextBk = default_color_bg;
                             if(ListView_GetItem(pnmhdr->hwndFrom, &item)){
                                 unsigned int dbidx = item.lParam;
                                 time_t last_start = 0;
@@ -2668,16 +2702,14 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                                 regdata_info.unlock();
                                 // 放送開始から30分以内のアイテムに色を付ける
                                 if(last_start + BROADCAST_PERIOD > time(NULL)){
-                                    lplvcd->clrText   = start_bc_color_tx;
-                                    lplvcd->clrTextBk = start_bc_color_bg;
-                                } else {
-                                    lplvcd->clrTextBk = RGB(255,255,255);
+                                    lplvcd->clrText   = startbc_color_tx;
+                                    lplvcd->clrTextBk = startbc_color_bg;
                                 }
                             }
                             if(iSortedIdx == (lplvcd->iSubItem+1) || -iSortedIdx == (lplvcd->iSubItem+1)){
                                 // ソートカラムに色を付ける
-                                lplvcd->clrText   = start_sort_color_tx;
-                                lplvcd->clrTextBk = start_sort_color_bg;
+                                lplvcd->clrText   = sortcol_color_tx;
+                                lplvcd->clrTextBk = sortcol_color_bg;
                             }
                             // ペイント対象がアイコンカラムの場合、POSTPAINT通知を要求
                             if(lplvcd->iSubItem >= COLINDEX_BALLOON && lplvcd->iSubItem <= COLINDEX_EXTAPP){
@@ -2735,6 +2767,22 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                         }
                         break;
 
+                    }
+                }
+                // リストビューアイテム ダブルクリック
+                if(pnmhdr->code == NM_DBLCLK){
+                    _dbg(_T("NM_DBLCLK\n"));
+                    int item_dc_select = ReadOptionInt(OPTION_ITEM_DC_SELECT, DEF_OPTION_ITEM_DC_SELECT);
+                    switch(item_dc_select){
+                    case 0:
+                        PostMessage(hDlgWnd, WM_COMMAND, IDM_REGSET, 0);
+                        break;
+                    case 1:
+                        PostMessage(hDlgWnd, WM_COMMAND, IDM_OPEN_LV, 0);
+                        break;
+                    case 2:
+                        PostMessage(hDlgWnd, WM_COMMAND, IDM_OPEN_USER, 0);
+                        break;
                     }
                 }
             }
