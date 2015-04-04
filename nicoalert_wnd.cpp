@@ -2793,17 +2793,20 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                 // リストビューアイテム ダブルクリック
                 if(pnmhdr->code == NM_DBLCLK){
                     _dbg(_T("NM_DBLCLK\n"));
-                    int item_dc_select = ReadOptionInt(OPTION_ITEM_DC_SELECT, DEF_OPTION_ITEM_DC_SELECT);
-                    switch(item_dc_select){
-                    case 0:
-                        PostMessage(hDlgWnd, WM_COMMAND, IDM_REGSET, 0);
-                        break;
-                    case 1:
-                        PostMessage(hDlgWnd, WM_COMMAND, IDM_OPEN_LV, 0);
-                        break;
-                    case 2:
-                        PostMessage(hDlgWnd, WM_COMMAND, IDM_OPEN_USER, 0);
-                        break;
+
+                    if(ReadOptionInt(OPTION_ITEM_DC_ENABLE, DEF_OPTION_ITEM_DC_ENABLE)){
+                        int item_dc_select = ReadOptionInt(OPTION_ITEM_DC_SELECT, DEF_OPTION_ITEM_DC_SELECT);
+                        switch(item_dc_select){
+                        case 0:
+                            PostMessage(hDlgWnd, WM_COMMAND, IDM_REGSET, 0);
+                            break;
+                        case 1:
+                            PostMessage(hDlgWnd, WM_COMMAND, IDM_OPEN_LV, 0);
+                            break;
+                        case 2:
+                            PostMessage(hDlgWnd, WM_COMMAND, IDM_OPEN_USER, 0);
+                            break;
+                        }
                     }
                 }
             }
