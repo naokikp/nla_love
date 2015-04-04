@@ -10,7 +10,7 @@ BOOL InitApp(HINSTANCE, LPCTSTR);
 
 TCHAR IconName[]    = _T("APPICON");
 TCHAR szClassName[] = _T("APPLICATIONCLASS_nicoalert");
-TCHAR szMutexName[] = _T("APPLICATIONMUTEX_nicoalert");
+TCHAR szMutexName[] = _T("APPLICATIONMUTEX_nicoalert") _DEBUGT("_DEBUG");
 
 HINSTANCE hInst;
 HWND hWnd;
