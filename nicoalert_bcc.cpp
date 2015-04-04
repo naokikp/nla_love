@@ -129,16 +129,21 @@ static void bcc_check(int infotype, tstring &lvid, unsigned int idx[3]){
         if(rd->notify & NOTIFY_ENABLE){
             notify |= rd->notify;
         }
+        // リストビュー更新通知
         if(callback_alinfo_ntf){
             callback_alinfo_ntf(idx[i], TRUE);
         }
-        trd = rd;
+
+        if(!trd) trd = rd;
     }
     if(trd) mrd = *trd;
 
     regdata_info.unlock();
 
-    // メインウィンドウに通知
+    // dbidxが引けなかった場合(ガード)
+    if(mrd.key.size() == 0) return;
+
+    // ログウィンドウに通知(要regdata_info解除)
     if(callback_msginfo){
         tstring msg;
         msg = mrd.key + _T(" : ") + lvid + _T(" が放送開始しました。");
@@ -146,7 +151,7 @@ static void bcc_check(int infotype, tstring &lvid, unsigned int idx[3]){
     }
 
     // バルーン通知ビット
-    if((notify & NOTIFY_BALLOON) && trd){
+    if((notify & NOTIFY_BALLOON)){
         tstring msg, msg2;
         switch(infotype){
         case INFOTYPE_OFFICIAL:

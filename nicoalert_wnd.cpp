@@ -2136,6 +2136,17 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                         }
                     }
                 }
+#ifdef _DEBUG
+                {
+                    MENUITEMINFO mii;
+                    memset(&mii, 0, sizeof(mii));
+                    mii.cbSize = sizeof(mii);
+                    mii.wID = IDM_DEBUGNOTIFY;
+                    mii.fMask = MIIM_ID | MIIM_STRING;
+                    mii.dwTypeData = _T("デバッグ通知");
+                    InsertMenuItem(hSubmenu, GetMenuItemCount(hSubmenu), TRUE, &mii);
+                }
+#endif
 
                 // リストビュー右クリック トラックメニュー表示
                 ClientToScreen(hWndListView, &pt);
@@ -2353,8 +2364,18 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
 
         case IDM_VERSION:
             MessageBox(hDlgWnd,
-                PROGRAM_NAME _T(" ") VERSION_STRING _T(" - ") VERSION_LIC _T("\n\n")
+                PROGRAM_NAME _T(" ") VERSION_STRING _DEBUGT("(DebugBuild)") _T(" - ") _T(VERSION_LIC) _T("\n\n")
                 _T("User-Agent: ") _T(UA_STRING) _T("\n"), _T("バージョン情報"), MB_OK);
+            break;
+
+        case IDM_DEBUGNOTIFY:
+            {
+                c_alertinfo ai;
+                ai.infotype = INFOTYPE_OFFICIAL;
+                ai.lvid = _T("lv0");
+                ai.usrid = _T("user/0");
+                alertinfo_ind(&ai);
+            }
             break;
 
         case IDM_EXIT:

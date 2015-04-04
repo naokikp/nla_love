@@ -79,6 +79,7 @@
 #define IDM_HELP                                40014
 #define IDM_LABELSET                            40015
 #define IDM_VERSION                             40016
+#define IDM_DEBUGNOTIFY                         40017
 #define IDM_LABELADD_ID_START                   40100
 #define IDM_LABELDEL_ID_START                   40200
 #define IDI_BALLOON                             50000

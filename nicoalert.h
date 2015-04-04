@@ -36,6 +36,9 @@ extern HINSTANCE hInst;
 
 #ifdef _DEBUG
 //#define DEBUG_NOT_CONNECT
+#define _DEBUGT(X) _T(X)
+#else
+#define _DEBUGT(X) /* */
 #endif
 
 void _dbg(const TCHAR *fmt, ...);

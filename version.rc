@@ -32,7 +32,7 @@ VS_VERSION_INFO VERSIONINFO
             VALUE "FileDescription", PROGRAM_NAME " " VERSION_STRING "\0"
             VALUE "FileVersion", VERSION_STRING_RSC "\0"
             VALUE "InternalName", "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2012 naoki.kp\0"
+            VALUE "LegalCopyright", VERSION_LIC "\0"
             VALUE "LegalTrademarks", "naoki.kp\0"
             VALUE "OriginalFilename", "nicoalert.exe\0"
             VALUE "PrivateBuild", "\0"
