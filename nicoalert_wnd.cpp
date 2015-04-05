@@ -1065,6 +1065,7 @@ static BOOL CALLBACK SettingDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp
             CheckDlgButton(hDlgWnd, IDC_SE_BALLOON_BOUYOMI,   ReadOptionInt(OPTION_BALLOON_BOUYOMI,   DEF_OPTION_BALLOON_BOUYOMI));
             CheckDlgButton(hDlgWnd, IDC_SE_AUTO_KEYNAME_ACQ,  ReadOptionInt(OPTION_AUTO_KEYNAME_ACQ,  DEF_OPTION_AUTO_KEYNAME_ACQ));
             CheckDlgButton(hDlgWnd, IDC_SE_TOOLTIP_HELP,      ReadOptionInt(OPTION_TOOLTIP_HELP,      DEF_OPTION_TOOLTIP_HELP));
+            CheckDlgButton(hDlgWnd, IDC_SE_VERSION_CHECK,     ReadOptionInt(OPTION_VERCHK_ENABLE,     DEF_OPTION_VERCHK_ENABLE));
             CheckDlgButton(hDlgWnd, IDC_SE_ITEM_DC_ENABLE,    ReadOptionInt(OPTION_ITEM_DC_ENABLE,    DEF_OPTION_ITEM_DC_ENABLE));
 
             int item_dc_select = ReadOptionInt(OPTION_ITEM_DC_SELECT, DEF_OPTION_ITEM_DC_SELECT);
@@ -1106,6 +1107,7 @@ static BOOL CALLBACK SettingDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp
             SendMessage(GetDlgItem(hDlgWnd, IDC_SE_SAVE), BM_SETIMAGE, IMAGE_ICON, (LPARAM)LoadIconRsc(IDI_TICK));
             SendMessage(GetDlgItem(hDlgWnd, IDC_SE_CANCEL), BM_SETIMAGE, IMAGE_ICON, (LPARAM)LoadIconRsc(IDI_CROSS));
 
+            // チェックボックス連動トリガ
             PostMessage(hDlgWnd, WM_COMMAND, IDC_SE_DEFAULT_BROWSER_USE, 0);
             PostMessage(hDlgWnd, WM_COMMAND, IDC_SE_ITEM_DC_ENABLE, 0);
 
@@ -1120,6 +1122,7 @@ static BOOL CALLBACK SettingDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp
                     { IDC_SE_BALLOON_BOUYOMI,       _T("バルーン通知設定がされた放送開始時に、音声読み上げを行います。\n(棒読みちゃんが起動されている必要があります)") },
                     { IDC_SE_AUTO_KEYNAME_ACQ,      _T("コミュニティ、チャンネル、放送番号の登録時に、登録名を自動的に取得します。\n既に手動で入力されていた場合は取得しません。") },
                     { IDC_SE_TOOLTIP_HELP,          _T("チェックボックス、ボタン等にマウスカーソルを合わせた際に説明を表示します。") },
+                    { IDC_SE_VERSION_CHECK,         _T("アプリケーション起動時、新しいバージョンがあるか確認し通知します。") },
                     { IDC_SE_ITEM_DC_ENABLE,        _T("登録アイテムをダブルクリックした際の動作を設定します。") },
                     { IDC_SE_CHECK_BALLOON,         _T("放送開始時にバルーンを表示します。") },
                     { IDC_SE_CHECK_BROWSER,         _T("放送開始時にブラウザで放送ページを開きます。") },
@@ -1159,6 +1162,7 @@ static BOOL CALLBACK SettingDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp
                 SaveOptionInt(OPTION_BALLOON_BOUYOMI,   IsDlgButtonChecked(hDlgWnd, IDC_SE_BALLOON_BOUYOMI));
                 SaveOptionInt(OPTION_AUTO_KEYNAME_ACQ,  IsDlgButtonChecked(hDlgWnd, IDC_SE_AUTO_KEYNAME_ACQ));
                 SaveOptionInt(OPTION_TOOLTIP_HELP,      IsDlgButtonChecked(hDlgWnd, IDC_SE_TOOLTIP_HELP));
+                SaveOptionInt(OPTION_VERCHK_ENABLE,     IsDlgButtonChecked(hDlgWnd, IDC_SE_VERSION_CHECK));
                 SaveOptionInt(OPTION_ITEM_DC_ENABLE,    IsDlgButtonChecked(hDlgWnd, IDC_SE_ITEM_DC_ENABLE));
 
                 int item_dc_select =
@@ -1724,15 +1728,17 @@ static void nawnd_delicon(void){
     bTrayIconInit = false;
 }
 // タスクトレイバルーン出力
-static void nawnd_msgicon(const TCHAR *msg, tstring &last_lv){
+static BOOL nawnd_msgpopup(const TCHAR *msg){
     nIcon.uFlags = nIcon.uFlags | NIF_INFO;
     _tcsncpy_s(nIcon.szInfo, msg, sizeof(nIcon.szInfo));
     nIcon.szInfo[ESIZEOF(nIcon.szInfo)-1] = '\0';
     nIcon.dwInfoFlags = NIIF_INFO;
-    if(retry_Shell_NotifyIcon(NIM_MODIFY, &nIcon)){
-        g_last_lv = last_lv;
-    }
+    return retry_Shell_NotifyIcon(NIM_MODIFY, &nIcon);
 }
+static void nawnd_msgicon(const TCHAR *msg, tstring &last_lv){
+    if(nawnd_msgpopup(msg)) g_last_lv = last_lv;
+}
+
 // タスクトレイアイコン初期化
 static void nawnd_initicon(HWND hWnd){
     memset(&nIcon, 0, sizeof(nIcon)); 
@@ -1989,7 +1995,7 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                 PostQuitMessage(1);
                 return FALSE;
             }
-            if(!cmm_start(alertinfo_ind, msginfo_ind)){
+            if(!cmm_start(alertinfo_ind, nawnd_msgpopup, msginfo_ind)){
                 MessageBox(hDlgWnd, _T("スレッドが起動できません。(cmm_start)"), PROGRAM_NAME, MB_OK | MB_ICONERROR);
                 PostQuitMessage(1);
                 return FALSE;
@@ -2010,7 +2016,7 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
 
 #ifdef _DEBUG
             tstring last_lv = _T("lv00");
-            nawnd_msgicon(VERSION_STRING _T("(DebugBuild)") _T("\n") _T(UA_STRING), last_lv);
+            nawnd_msgpopup(VERSION_STRING _T("(DebugBuild)") _T("\n") _T(UA_STRING));
 #endif
             // OLE D&Dの初期化
             OleInitialize(NULL);

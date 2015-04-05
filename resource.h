@@ -33,6 +33,7 @@
 #define IDC_SE_BALLOON_BOUYOMI                  5005
 #define IDC_SE_AUTO_KEYNAME_ACQ                 5006
 #define IDC_SE_TOOLTIP_HELP                     5007
+#define IDC_SE_VERSION_CHECK                    5008
 #define IDC_SE_SORT_COLOR_TX                    5010
 #define IDC_SE_SORT_COLOR_BG                    5011
 #define IDC_SE_BC_COLOR_TX                      5012
