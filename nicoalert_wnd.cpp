@@ -3130,8 +3130,10 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
 
             // 未保存設定のDB保存
             if(setting_info_darty){
-                if(nadb.savesetting(setting_info)){
-                    setting_info_darty = false;
+                int retry = 3;
+                while(retry-- > 0){
+                    if(nadb.savesetting(setting_info)) retry = 0;
+                    else Sleep(500);
                 }
             }
             // DBクローズ、登録情報のメモリ解放
