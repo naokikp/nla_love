@@ -1741,12 +1741,16 @@ static LRESULT CALLBACK WndProcPopup(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp){
             HDC hDeskDC = GetDC(hWnd);
             pmpwi->hDC = CreateCompatibleDC(hDeskDC);
 
+            // テキスト描画モード
+            UINT drawmode = DT_NOPREFIX | DT_WORDBREAK | 
+                DT_NOFULLWIDTHCHARBREAK | DT_END_ELLIPSIS | DT_EDITCONTROL;
+
             // テキストサイズ取得
             RECT rctxt;
             rctxt.left = rctxt.top = MSGPOPUPWINDOW_TEXT_MARGIN;
             rctxt.right = pmpwi->w - MSGPOPUPWINDOW_TEXT_MARGIN;
             rctxt.bottom = MSGPOPUPWINDOW_HEIGHT;
-            DrawText(pmpwi->hDC, pmpwi->msg.c_str(), -1, &rctxt, DT_NOPREFIX | DT_WORDBREAK | DT_CALCRECT);
+            DrawText(pmpwi->hDC, pmpwi->msg.c_str(), -1, &rctxt, drawmode | DT_CALCRECT);
 
             int w = pmpwi->w;
             int h = rctxt.bottom + MSGPOPUPWINDOW_TEXT_MARGIN;
@@ -1787,7 +1791,7 @@ static LRESULT CALLBACK WndProcPopup(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp){
             HFONT hFontOld = SelectFont(pmpwi->hDC, hFontPopupText);
             SetTextColor(pmpwi->hDC, RGB(0,0,0));
             SetBkMode(pmpwi->hDC, TRANSPARENT);
-            DrawText(pmpwi->hDC, pmpwi->msg.c_str(), -1, &rctxt, DT_NOPREFIX | DT_WORDBREAK);
+            DrawText(pmpwi->hDC, pmpwi->msg.c_str(), -1, &rctxt, drawmode);
             SelectFont(pmpwi->hDC, hFontOld); 
             // 描画END
 
@@ -2396,9 +2400,12 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                     MENUITEMINFO mii;
                     memset(&mii, 0, sizeof(mii));
                     mii.cbSize = sizeof(mii);
-                    mii.wID = IDM_DEBUGNOTIFY;
                     mii.fMask = MIIM_ID | MIIM_STRING;
+                    mii.wID = IDM_DEBUGNOTIFY;
                     mii.dwTypeData = _T("デバッグ通知");
+                    InsertMenuItem(hSubmenu, GetMenuItemCount(hSubmenu), TRUE, &mii);
+                    mii.wID = IDM_DEBUGPOPUP;
+                    mii.dwTypeData = _T("デバッグポップアップ");
                     InsertMenuItem(hSubmenu, GetMenuItemCount(hSubmenu), TRUE, &mii);
                 }
 #endif
@@ -2634,6 +2641,14 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                 ai.lvid = buf;
                 ai.usrid = _T("user/0");
                 alertinfo_ind(&ai);
+            }
+            break;
+
+        case IDM_DEBUGPOPUP:
+            {
+                nawnd_msgpopup(_T("[aaaaaa][bbbbbb][cccccc]\n[dddddd][eeeeee][ffffff][gggggg]\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz"), _T(""));
+                nawnd_msgpopup(_T("[aaaaaa][bbbbbb][cccccc]\n[dddddd][eeeeee][ffffff][gggggg]\nabcdefghijklmnopqrstuvwxyz日本語abcdefghijklmnopqrstuvwxyz"), _T(""));
+                nawnd_msgpopup(_T("[aaaaaa][bbbbbb][cccccc]\n[dddddd][eeeeee][ffffff][gggggg]\nabcdefghijklmnopqrstuvwxyz\r\nabc\r\ndefghijklmnopqrstuvwxyz"), _T(""));
             }
             break;
 #endif
