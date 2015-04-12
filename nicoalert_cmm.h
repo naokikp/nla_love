@@ -51,7 +51,7 @@ enum cmm_errno {
     CMM_MAINTENANCE,
 };
 
-bool cmm_start( void(*)(const c_alertinfo *), BOOL(*)(const TCHAR *), void(*)(const TCHAR *) );
+bool cmm_start( void(*)(const c_alertinfo *), BOOL(*)(const tstring &msg, const tstring &link), void(*)(const TCHAR *) );
 bool cmm_exit(void);
 
 int nicoalert_getstreaminfo(tstring &lvid, c_streaminfo &si);

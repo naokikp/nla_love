@@ -19,7 +19,7 @@ static volatile bool isBCSCExit = false;
 
 // 各種コールバック
 static void(*callback_alinfo_ntf)(unsigned int, BOOL) = NULL;
-static void(*callback_msgtray)(const TCHAR *, tstring &) = NULL;
+static BOOL(*callback_msgpopup)(const tstring &msg, const tstring &link) = NULL;
 static void(*callback_msginfo)(const TCHAR *) = NULL;
 
 static class nicoalert_snd nasnd;
@@ -164,7 +164,7 @@ static void bcc_check(int infotype, tstring &lvid, unsigned int idx[3]){
             msg += _T("[ユーザー生放送]");
             break;
         }
-        msg2 = msg + _T(" ") + mrd.key_name + _T(" が放送開始しました。\n");
+        msg2 = msg + _T(" ") + mrd.key_name + _T(" が放送開始しました。");
         //msg += _T("\n");
         msg = msg + _T(" (") + lvid + _T(")\n");
         msg = msg + mrd.key_name + _T("(") + mrd.key + _T(")") + _T(" が放送開始しました。\n");
@@ -175,8 +175,7 @@ static void bcc_check(int infotype, tstring &lvid, unsigned int idx[3]){
             if(nicoalert_getstreaminfo(lvid, si) == CMM_SUCCESS){
                 msg = msg + _T("【") + si.title + _T("】\n");
                 msg = msg + si.desc + _T("\n");
-                msg2 = msg2 + si.title + _T("\n");
-                msg2 = msg2 + si.desc + _T("\n");
+                msg2 = msg2 + si.title + _T(" / ") + si.desc;
             }
         } else {
             // lv指定じゃない公式生放送は放送ページからタイトルを取得
@@ -192,10 +191,13 @@ static void bcc_check(int infotype, tstring &lvid, unsigned int idx[3]){
                     Sleep(1000);
                 }
                 msg = msg + _T("【") + keyname + _T("】\n");
-                msg2 = msg2 + keyname + _T("\n");
+                msg2 = msg2 + keyname;
             }
         }
-        callback_msginfo(msg2.c_str());
+
+        if(callback_msginfo){
+            callback_msginfo(msg2.c_str());
+        }
 
         // 棒読みちゃん
         if(ReadOptionInt(OPTION_BALLOON_BOUYOMI, DEF_OPTION_BALLOON_BOUYOMI)){
@@ -205,8 +207,9 @@ static void bcc_check(int infotype, tstring &lvid, unsigned int idx[3]){
         }
 
         // タスクトレイバルーン表示実行
-        if(callback_msgtray){
-            callback_msgtray(msg.c_str(), lvid);
+        if(callback_msgpopup){
+            trim_trailws(msg);
+            callback_msgpopup(msg, lvid);
         }
     }
 
@@ -320,12 +323,12 @@ static void bcc_check_thread(void *arg){
 // bccスレッド起動
 bool bcc_start(
     void(*cb_alinfo_ntf)(unsigned int, BOOL),
-    void(*cb_msgtray)(const TCHAR *, tstring &last_lv),
+    BOOL(*cb_msgpopup)(const tstring &msg, const tstring &link),
     void(*cb_msginfo)(const TCHAR *) )
 {
 
     callback_alinfo_ntf = cb_alinfo_ntf;
-    callback_msgtray = cb_msgtray;
+    callback_msgpopup = cb_msgpopup;
     callback_msginfo = cb_msginfo;
 
     hBCSCEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
@@ -345,7 +348,7 @@ bool bcc_exit(void){
     DWORD ret;
 
     callback_alinfo_ntf = NULL;
-    callback_msgtray = NULL;
+    callback_msgpopup = NULL;
     callback_msginfo = NULL;
 
     while(waitcount){

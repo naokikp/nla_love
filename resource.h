@@ -57,6 +57,11 @@
 #define IDC_SE_ITEM_DC_ITEMSETTING              5051
 #define IDC_SE_ITEM_DC_OPEN_LV                  5052
 #define IDC_SE_ITEM_DC_OPEN_ID                  5053
+#define IDC_SE_POPUP_ENABLE                     5060
+#define IDC_SE_POPUP_LEFTTOP                    5061
+#define IDC_SE_POPUP_LEFTBOTTOM                 5062
+#define IDC_SE_POPUP_RIGHTTOP                   5063
+#define IDC_SE_POPUP_RIGHTBOTTOM                5064
 #define IDC_MI_MSG                              6000
 #define IDC_LS_LISTVIEW                         7000
 #define IDC_LS_LABELSET                         7001
@@ -80,7 +85,6 @@
 #define IDM_HELP                                40014
 #define IDM_LABELSET                            40015
 #define IDM_VERSION                             40016
-#define IDM_DEBUGNOTIFY                         40017
 #define IDM_LABELADD_ID_START                   40100
 #define IDM_LABELDEL_ID_START                   40200
 #define IDI_BALLOON                             50000
@@ -94,3 +98,4 @@
 #define IDI_SOUND                               50008
 #define IDI_TICK                                50009
 #define IDI_WRENCH                              50010
+#define IDB_POPUPBG                             50100

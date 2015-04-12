@@ -16,6 +16,8 @@ static HACCEL hAccel = NULL;
 static HHOOK HHook;
 static FARPROC Org_WndProc_Listview;
 static deque_ts<time_t> RedrawTimer;
+static MsgPopupWindowInfo_t MsgPopupWindowInfo[MSGPOPUPWINDOWMAX];
+static TCHAR szClassNamePopup[] = _T("APPLICATIONCLASS_nicoalert_popup");
 
 static class nicoalert_db nadb;
 static void msginfo_ind(const TCHAR *msg);
@@ -1067,11 +1069,18 @@ static BOOL CALLBACK SettingDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp
             CheckDlgButton(hDlgWnd, IDC_SE_TOOLTIP_HELP,      ReadOptionInt(OPTION_TOOLTIP_HELP,      DEF_OPTION_TOOLTIP_HELP));
             CheckDlgButton(hDlgWnd, IDC_SE_VERSION_CHECK,     ReadOptionInt(OPTION_VERCHK_ENABLE,     DEF_OPTION_VERCHK_ENABLE));
             CheckDlgButton(hDlgWnd, IDC_SE_ITEM_DC_ENABLE,    ReadOptionInt(OPTION_ITEM_DC_ENABLE,    DEF_OPTION_ITEM_DC_ENABLE));
+            CheckDlgButton(hDlgWnd, IDC_SE_POPUP_ENABLE,      ReadOptionInt(OPTION_POPUP_ENABLE,      DEF_OPTION_POPUP_ENABLE));
 
             int item_dc_select = ReadOptionInt(OPTION_ITEM_DC_SELECT, DEF_OPTION_ITEM_DC_SELECT);
             CheckDlgButton(hDlgWnd, IDC_SE_ITEM_DC_ITEMSETTING, item_dc_select == 0);
             CheckDlgButton(hDlgWnd, IDC_SE_ITEM_DC_OPEN_LV,     item_dc_select == 1);
             CheckDlgButton(hDlgWnd, IDC_SE_ITEM_DC_OPEN_ID,     item_dc_select == 2);
+
+            int popup_select = ReadOptionInt(OPTION_POPUP_SELECT, DEF_OPTION_POPUP_SELECT);
+            CheckDlgButton(hDlgWnd, IDC_SE_POPUP_LEFTTOP,    popup_select == 0);
+            CheckDlgButton(hDlgWnd, IDC_SE_POPUP_LEFTBOTTOM, popup_select == POPUPLOC_Y);
+            CheckDlgButton(hDlgWnd, IDC_SE_POPUP_RIGHTTOP,    popup_select == POPUPLOC_X);
+            CheckDlgButton(hDlgWnd, IDC_SE_POPUP_RIGHTBOTTOM, popup_select == (POPUPLOC_X|POPUPLOC_Y));
 
             unsigned int notify = ReadOptionInt(OPTION_DEFAULT_NOTIFY, DEF_OPTION_DEFAULT_NOTIFY);
             CheckDlgButton(hDlgWnd, IDC_SE_CHECK_BALLOON, (notify & NOTIFY_BALLOON)?TRUE:FALSE);
@@ -1110,6 +1119,7 @@ static BOOL CALLBACK SettingDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp
             // チェックボックス連動トリガ
             PostMessage(hDlgWnd, WM_COMMAND, IDC_SE_DEFAULT_BROWSER_USE, 0);
             PostMessage(hDlgWnd, WM_COMMAND, IDC_SE_ITEM_DC_ENABLE, 0);
+            PostMessage(hDlgWnd, WM_COMMAND, IDC_SE_POPUP_ENABLE, 0);
 
             // ツールチップデータ登録
             if(ReadOptionInt(OPTION_TOOLTIP_HELP, DEF_OPTION_TOOLTIP_HELP)){
@@ -1124,6 +1134,7 @@ static BOOL CALLBACK SettingDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp
                     { IDC_SE_TOOLTIP_HELP,          _T("チェックボックス、ボタン等にマウスカーソルを合わせた際に説明を表示します。") },
                     { IDC_SE_VERSION_CHECK,         _T("アプリケーション起動時、新しいバージョンがあるか確認し通知します。") },
                     { IDC_SE_ITEM_DC_ENABLE,        _T("登録アイテムをダブルクリックした際の動作を設定します。") },
+                    { IDC_SE_POPUP_ENABLE,          _T("バルーン表示の代わりに、独自のポップアップウィンドウを表示します。") },
                     { IDC_SE_CHECK_BALLOON,         _T("放送開始時にバルーンを表示します。") },
                     { IDC_SE_CHECK_BROWSER,         _T("放送開始時にブラウザで放送ページを開きます。") },
                     { IDC_SE_CHECK_SOUND,           _T("放送開始時にサウンドファイルを再生します。") },
@@ -1164,11 +1175,18 @@ static BOOL CALLBACK SettingDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp
                 SaveOptionInt(OPTION_TOOLTIP_HELP,      IsDlgButtonChecked(hDlgWnd, IDC_SE_TOOLTIP_HELP));
                 SaveOptionInt(OPTION_VERCHK_ENABLE,     IsDlgButtonChecked(hDlgWnd, IDC_SE_VERSION_CHECK));
                 SaveOptionInt(OPTION_ITEM_DC_ENABLE,    IsDlgButtonChecked(hDlgWnd, IDC_SE_ITEM_DC_ENABLE));
+                SaveOptionInt(OPTION_POPUP_ENABLE,      IsDlgButtonChecked(hDlgWnd, IDC_SE_POPUP_ENABLE));
 
                 int item_dc_select =
                     IsDlgButtonChecked(hDlgWnd, IDC_SE_ITEM_DC_OPEN_LV) ? 1 :
                     IsDlgButtonChecked(hDlgWnd, IDC_SE_ITEM_DC_OPEN_ID) ? 2 : 0;
                 SaveOptionInt(OPTION_ITEM_DC_SELECT, item_dc_select);
+
+                int popup_select =
+                    IsDlgButtonChecked(hDlgWnd, IDC_SE_POPUP_LEFTTOP) ? 0 :
+                    IsDlgButtonChecked(hDlgWnd, IDC_SE_POPUP_LEFTBOTTOM) ? POPUPLOC_Y :
+                    IsDlgButtonChecked(hDlgWnd, IDC_SE_POPUP_RIGHTTOP) ? POPUPLOC_X : (POPUPLOC_X|POPUPLOC_Y);
+                SaveOptionInt(OPTION_POPUP_SELECT, popup_select);
 
                 SaveOptionInt(OPTION_LSORT_TXCOLOR, color_lsort_tx);
                 SaveOptionInt(OPTION_LSORT_BGCOLOR, color_lsort_bg);
@@ -1218,6 +1236,16 @@ static BOOL CALLBACK SettingDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp
                 EnableWindow(GetDlgItem(hDlgWnd, IDC_SE_ITEM_DC_ITEMSETTING), fCheck);
                 EnableWindow(GetDlgItem(hDlgWnd, IDC_SE_ITEM_DC_OPEN_LV), fCheck);
                 EnableWindow(GetDlgItem(hDlgWnd, IDC_SE_ITEM_DC_OPEN_ID), fCheck);
+            }
+            break;
+
+        case IDC_SE_POPUP_ENABLE:
+            {
+                BOOL fCheck = IsDlgButtonChecked(hDlgWnd, IDC_SE_POPUP_ENABLE);
+                EnableWindow(GetDlgItem(hDlgWnd, IDC_SE_POPUP_LEFTTOP), fCheck);
+                EnableWindow(GetDlgItem(hDlgWnd, IDC_SE_POPUP_LEFTBOTTOM), fCheck);
+                EnableWindow(GetDlgItem(hDlgWnd, IDC_SE_POPUP_RIGHTTOP), fCheck);
+                EnableWindow(GetDlgItem(hDlgWnd, IDC_SE_POPUP_RIGHTBOTTOM), fCheck);
             }
             break;
 
@@ -1689,6 +1717,218 @@ static BOOL CALLBACK MsgInfoProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
     return TRUE;
 }
 
+HDC hDCPopupBG;
+HBITMAP hBmpPopupBG;
+HFONT hFontPopupText;
+
+// ポップアップウィンドウ
+static LRESULT CALLBACK WndProcPopup(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp){
+    MsgPopupWindowInfo_t *pmpwi = NULL;
+    switch(msg) {
+    case WM_CREATE:
+        {
+            CREATESTRUCT *pcs = (CREATESTRUCT *)lp;
+
+            // ウィンドウ形式設定
+            SetWindowLong(hWnd, GWL_STYLE, WS_POPUP);
+            SetWindowLong(hWnd, GWL_EXSTYLE, WS_EX_TOOLWINDOW | WS_EX_LAYERED);
+
+            // ウィンドウ固有パラメータ保持
+            pmpwi = (MsgPopupWindowInfo_t*)pcs->lpCreateParams;
+            SetWindowLong(hWnd, GWL_USERDATA, (LONG)pmpwi);
+
+            // 描画バッファ生成
+            HDC hDeskDC = GetDC(hWnd);
+            pmpwi->hDC = CreateCompatibleDC(hDeskDC);
+
+            // テキストサイズ取得
+            RECT rctxt;
+            rctxt.left = rctxt.top = MSGPOPUPWINDOW_TEXT_MARGIN;
+            rctxt.right = pmpwi->w - MSGPOPUPWINDOW_TEXT_MARGIN;
+            rctxt.bottom = MSGPOPUPWINDOW_HEIGHT;
+            DrawText(pmpwi->hDC, pmpwi->msg.c_str(), -1, &rctxt, DT_NOPREFIX | DT_WORDBREAK | DT_CALCRECT);
+
+            int w = pmpwi->w;
+            int h = rctxt.bottom + MSGPOPUPWINDOW_TEXT_MARGIN;
+
+            if(pmpwi->popuploc&POPUPLOC_Y){
+                pmpwi->y -= h;
+            }
+            pmpwi->h = h;
+
+            pmpwi->hBmp = CreateCompatibleBitmap(hDeskDC, pmpwi->w, pmpwi->h);
+            SelectBitmap(pmpwi->hDC, pmpwi->hBmp);
+            ReleaseDC(hWnd, hDeskDC);
+
+            // テキストサイズにあわせてウィンドウ背景とテキスト描画
+            SetWindowPos(hWnd, HWND_TOPMOST, pmpwi->x, pmpwi->y, w, h, 0);
+
+            BITMAP bmp;
+            GetObject(hBmpPopupBG, sizeof(BITMAP), &bmp);
+            SetStretchBltMode(pmpwi->hDC, HALFTONE);
+            SetBrushOrgEx(pmpwi->hDC, 0, 0, NULL);
+            StretchBlt(pmpwi->hDC, 0, 0, w, h, hDCPopupBG, 0,0,bmp.bmWidth,bmp.bmHeight, SRCCOPY);
+
+            SetWindowRgn(hWnd, CreateRoundRectRgn(
+                0,0,w+1,h+1, MSGPOPUPWINDOW_ROUND_SIZE,MSGPOPUPWINDOW_ROUND_SIZE), FALSE);
+
+            HBRUSH hBrushOld = SelectBrush(pmpwi->hDC, GetStockObject(NULL_BRUSH));
+            HPEN   hPen      = CreatePen(PS_SOLID, 1, MSGPOPUPWINDOW_EDGE_COLOR);
+            HPEN   hPen2     = CreatePen(PS_SOLID, 1, MSGPOPUPWINDOW_EDGE_COLOR2);
+            HPEN   hPenOld   = SelectPen(pmpwi->hDC, hPen2);
+            RoundRect(pmpwi->hDC, 1,1,w-1,h-1, MSGPOPUPWINDOW_ROUND_SIZE2,MSGPOPUPWINDOW_ROUND_SIZE2);
+            SelectPen(pmpwi->hDC, hPen);
+            RoundRect(pmpwi->hDC, 0,0,w,h, MSGPOPUPWINDOW_ROUND_SIZE,MSGPOPUPWINDOW_ROUND_SIZE);
+            SelectObject(pmpwi->hDC, hBrushOld);
+            SelectObject(pmpwi->hDC, hPenOld);
+            DeletePen(hPen);
+            DeletePen(hPen2);
+
+            HFONT hFontOld = SelectFont(pmpwi->hDC, hFontPopupText);
+            SetTextColor(pmpwi->hDC, RGB(0,0,0));
+            SetBkMode(pmpwi->hDC, TRANSPARENT);
+            DrawText(pmpwi->hDC, pmpwi->msg.c_str(), -1, &rctxt, DT_NOPREFIX | DT_WORDBREAK);
+            SelectFont(pmpwi->hDC, hFontOld); 
+            // 描画END
+
+            // フェードイン設定
+            SetLayeredWindowAttributes(hWnd, 0, 0, LWA_ALPHA);
+            SetTimer(hWnd, TID_POPUP, MSGPOPUP_CLOSE_TIME, NULL);
+            SetTimer(hWnd, TID_POPUP_FADE, MSGPOPUP_FADEIN_TIME/MSGPOPUP_FADE_DIV, NULL);
+            pmpwi->fade_dir = true;
+            pmpwi->fade_num = 0;
+            pmpwi->closing = false;
+
+            ShowWindow(hWnd, SW_NORMAL);
+        }
+        break;
+
+    case WM_LBUTTONDOWN:
+        {
+            pmpwi = (MsgPopupWindowInfo_t*)GetWindowLong(hWnd, GWL_USERDATA);
+            if(ReadOptionInt(OPTION_BALLOON_OPEN, DEF_OPTION_BALLOON_OPEN) && pmpwi->link.size() > 0){
+                if(!exec_browser_by_key(pmpwi->link)){
+                    msginfo_ind(_T("ブラウザ起動に失敗しました。"));
+                }
+            }
+        }
+        break;
+
+    case WM_MOUSEMOVE:
+        {
+            pmpwi = (MsgPopupWindowInfo_t*)GetWindowLong(hWnd, GWL_USERDATA);
+            if(!pmpwi->closing){
+                SetTimer(hWnd, TID_POPUP, MSGPOPUP_CLOSE_TIME, NULL);
+                SetTimer(hWnd, TID_POPUP_FADE, MSGPOPUP_FADEINFAST_TIME/MSGPOPUP_FADE_DIV, NULL);
+                pmpwi->fade_dir = true;
+            }
+        }
+        break;
+
+    case WM_RBUTTONDOWN:
+        {
+            pmpwi = (MsgPopupWindowInfo_t*)GetWindowLong(hWnd, GWL_USERDATA);
+            pmpwi->fade_dir = false;
+            pmpwi->closing = true;
+            SetTimer(hWnd, TID_POPUP_FADE, MSGPOPUP_FADEOUTFAST_TIME/MSGPOPUP_FADE_DIV, NULL);
+        }
+        break;
+
+    case WM_PAINT:
+        {
+            pmpwi = (MsgPopupWindowInfo_t*)GetWindowLong(hWnd, GWL_USERDATA);
+            PAINTSTRUCT ps;
+            BeginPaint(hWnd, &ps);
+            BitBlt(ps.hdc,
+                ps.rcPaint.left, ps.rcPaint.top,
+                ps.rcPaint.right - ps.rcPaint.left,
+                ps.rcPaint.bottom - ps.rcPaint.top,
+                pmpwi->hDC,
+                ps.rcPaint.left, ps.rcPaint.top,
+                SRCCOPY);
+            EndPaint(hWnd, &ps);
+        }
+        break;
+
+    case WM_TIMER:
+        {
+            pmpwi = (MsgPopupWindowInfo_t*)GetWindowLong(hWnd, GWL_USERDATA);
+            switch(wp){
+            case TID_POPUP_FADE:
+                {
+                    if(pmpwi->fade_dir){
+                        pmpwi->fade_num++;
+                        if(pmpwi->fade_num >= MSGPOPUP_FADE_DIV){
+                            pmpwi->fade_num = MSGPOPUP_FADE_DIV;
+                            KillTimer(hWnd, TID_POPUP_FADE);
+                        }
+                    } else {
+                        pmpwi->fade_num--;
+                        if(pmpwi->fade_num <= 0){
+                            pmpwi->fade_num = 0;
+                            KillTimer(hWnd, TID_POPUP_FADE);
+                            DestroyWindow(hWnd);
+                        }
+                    }
+                    SetLayeredWindowAttributes(hWnd, 0, 255*pmpwi->fade_num/MSGPOPUP_FADE_DIV, LWA_ALPHA);
+                }
+                break;
+
+            case TID_POPUP:
+                SetTimer(hWnd, TID_POPUP_FADE, MSGPOPUP_FADEOUT_TIME/MSGPOPUP_FADE_DIV, NULL);
+                pmpwi->fade_dir = false;
+                break;
+            }
+        }
+        break;
+
+    case WM_DESTROY:
+        pmpwi = (MsgPopupWindowInfo_t*)GetWindowLong(hWnd, GWL_USERDATA);
+        if(pmpwi->hDC){ DeleteDC(pmpwi->hDC); pmpwi->hDC = NULL; }
+        if(pmpwi->hBmp){ DeleteBitmap(pmpwi->hBmp); pmpwi->hBmp = NULL; }
+        pmpwi->busy = false;
+		break;
+
+	default:
+		return (DefWindowProc(hWnd, msg, wp, lp));
+	}
+	return 0L;
+}
+
+static BOOL InitPopupWnd(){
+
+    hBmpPopupBG = (HBITMAP)LoadImage(hInst, MAKEINTRESOURCE(IDB_POPUPBG), IMAGE_BITMAP, 0, 0, LR_DEFAULTCOLOR);
+    if(!hBmpPopupBG) return FALSE;
+    hDCPopupBG = CreateCompatibleDC(GetDC(NULL));
+    if(!hDCPopupBG) return FALSE;
+    SelectBitmap(hDCPopupBG, hBmpPopupBG);
+
+    int font_height = MulDiv(MSGPOPUPWINDOW_FONT_HEIGHT-2, GetDeviceCaps(hDCPopupBG, LOGPIXELSY), 72);
+    hFontPopupText = CreateFont(-font_height, 0,0,0,
+        0,//FW_BOLD,
+        FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET,
+        OUT_DEFAULT_PRECIS,
+        CLIP_DEFAULT_PRECIS,
+        CLEARTYPE_QUALITY, //PROOF_QUALITY,
+        DEFAULT_PITCH,
+        MSGPOPUPWINDOW_FONT);
+    if(!hFontPopupText) return FALSE;
+
+    WNDCLASS wc;
+    wc.style = CS_HREDRAW | CS_VREDRAW | CS_DROPSHADOW;
+	wc.lpfnWndProc = WndProcPopup;
+	wc.cbClsExtra = 0;
+	wc.cbWndExtra = 0;
+	wc.hInstance = hInst;
+	wc.hIcon = NULL;
+	wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+	wc.hbrBackground = (HBRUSH)GetStockObject(NULL_BRUSH);
+	wc.lpszMenuName = NULL;
+	wc.lpszClassName = szClassNamePopup;
+	return (RegisterClass(&wc));
+}
+
 
 // 登録データ変更通知(コールバック / IN: dbidx, fUpdate)
 static void alertinfo_ntf(unsigned int dbidx, BOOL fUpdate){
@@ -1727,16 +1967,22 @@ static void nawnd_delicon(void){
     retry_Shell_NotifyIcon(NIM_DELETE, &nIcon);
     bTrayIconInit = false;
 }
+
 // タスクトレイバルーン出力
-static BOOL nawnd_msgpopup(const TCHAR *msg){
+static BOOL nawnd_msgpopup(const tstring &msg, const tstring &link){
+
+    // 独自ポップアップ
+    if(ReadOptionInt(OPTION_POPUP_ENABLE, DEF_OPTION_POPUP_ENABLE)){
+        SendMessage(hDlg, WM_MSGPOPUP_NOTIFY, (WPARAM)&msg, (LPARAM)&link);
+        return TRUE;
+    }
+
+    g_last_lv = link;
     nIcon.uFlags = nIcon.uFlags | NIF_INFO;
-    _tcsncpy_s(nIcon.szInfo, msg, sizeof(nIcon.szInfo));
+    _tcsncpy_s(nIcon.szInfo, msg.c_str(), sizeof(nIcon.szInfo));
     nIcon.szInfo[ESIZEOF(nIcon.szInfo)-1] = '\0';
     nIcon.dwInfoFlags = NIIF_INFO;
     return retry_Shell_NotifyIcon(NIM_MODIFY, &nIcon);
-}
-static void nawnd_msgicon(const TCHAR *msg, tstring &last_lv){
-    if(nawnd_msgpopup(msg)) g_last_lv = last_lv;
 }
 
 // タスクトレイアイコン初期化
@@ -1953,6 +2199,9 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
             // タスクトレイアイコン初期化
             nawnd_initicon(hDlgWnd);
 
+            // 独自ポップアップウィンドウ初期化
+            if(!InitPopupWnd()) return FALSE;
+
             // ツールチップ
             {
                 const ToolTipInfo uMainDlgIds[] = {
@@ -1990,7 +2239,7 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
             SetTimer(hDlgWnd, TID_SETTING, 5000, NULL);
 
             // 各スレッド起動
-            if(!bcc_start(alertinfo_ntf, nawnd_msgicon, msginfo_ind)){
+            if(!bcc_start(alertinfo_ntf, nawnd_msgpopup, msginfo_ind)){
                 MessageBox(hDlgWnd, _T("スレッドが起動できません。(bcc_start)"), PROGRAM_NAME, MB_OK | MB_ICONERROR);
                 PostQuitMessage(1);
                 return FALSE;
@@ -2016,7 +2265,7 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
 
 #ifdef _DEBUG
             tstring last_lv = _T("lv00");
-            nawnd_msgpopup(VERSION_STRING _T("(DebugBuild)") _T("\n") _T(UA_STRING));
+            nawnd_msgpopup(VERSION_STRING _T("(DebugBuild)") _T("\n") _T(UA_STRING), _T(""));
 #endif
             // OLE D&Dの初期化
             OleInitialize(NULL);
@@ -2374,15 +2623,20 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                 _T("User-Agent: ") _T(UA_STRING) _T("\n"), _T("バージョン情報"), MB_OK);
             break;
 
+#ifdef _DEBUG
         case IDM_DEBUGNOTIFY:
             {
+                static int count = 1;
+                TCHAR buf[64];
+                _stprintf_s(buf, _T("lv%u"), count++);
                 c_alertinfo ai;
                 ai.infotype = INFOTYPE_OFFICIAL;
-                ai.lvid = _T("lv0");
+                ai.lvid = buf;
                 ai.usrid = _T("user/0");
                 alertinfo_ind(&ai);
             }
             break;
+#endif
 
         case IDM_EXIT:
             // 終了確認
@@ -2482,6 +2736,53 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
         }
         break;
 
+    case WM_MSGPOPUP_NOTIFY:
+        {
+            const tstring &msg = *(const tstring *)wp;
+            const tstring &link = *(const tstring *)lp;
+            int popuploc = ReadOptionInt(OPTION_POPUP_SELECT, DEF_OPTION_POPUP_SELECT);
+
+            // ポップアップ表示位置計算
+            RECT rect;
+            SystemParametersInfo(SPI_GETWORKAREA, 0, &rect, 0);
+            int needheight = 160;
+            vector<pair<int,int> > v;
+
+            for(int i = 0; i < MSGPOPUPWINDOWMAX; i++){
+                MsgPopupWindowInfo_t &mpwi = MsgPopupWindowInfo[i];
+                if(!mpwi.busy) continue;
+                v.push_back(make_pair(mpwi.y-MSGPOPUPWINDOW_MARGIN, mpwi.h+MSGPOPUPWINDOW_MARGIN*2));
+            }
+            v.push_back(make_pair(rect.bottom, 0));
+            sort(v.begin(), v.end());
+            int sp_y = 0, sp_h = rect.bottom, scan_y = 0;
+            for(auto it = v.begin(); it != v.end(); ++it){
+                int y = it->first, h = it->second;
+                if(y-scan_y >= needheight){
+                    sp_y = scan_y, sp_h = y - scan_y;
+                    if(!(popuploc&POPUPLOC_Y)){
+                        break;
+                    }
+                }
+                scan_y = y + h;
+            }
+
+            for(int i = 0; i < MSGPOPUPWINDOWMAX; i++){
+                MsgPopupWindowInfo_t &mpwi = MsgPopupWindowInfo[i];
+                if(mpwi.busy) continue;
+                mpwi.busy = true;
+                mpwi.popuploc = popuploc;
+                mpwi.w = MSGPOPUPWINDOW_WIDTH, mpwi.h = 0;
+                mpwi.x = popuploc&POPUPLOC_X ? rect.right-MSGPOPUPWINDOW_WIDTH : 0;
+                mpwi.y = popuploc&POPUPLOC_Y ? sp_y + sp_h : sp_y;
+                mpwi.msg = msg;
+                mpwi.link = link;
+                CreateWindow(szClassNamePopup, _T(""), 0,0,0,0,0, hDlgWnd, NULL, hInst, (LPVOID)&mpwi);
+                break;
+            }
+        }
+        break;
+
     case WM_TASKTRAY:
         {
             // タスクトレイ通知
@@ -2570,13 +2871,6 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                     PostMessage(hDlgWnd, WM_ALINFO_NOTIFY, 0, TRUE);
                     break;
                 }
-
-#if 0
-                // リストビュー ダブルクリック
-                if(pnmhdr->code == NM_DBLCLK){
-                    _dbg(_T("NM_DBLCLK\n"));
-                }
-#endif
 
                 if(pnmhdr->code == LVN_GETDISPINFO){
                     // _dbg(_T("LVN_GETDISPINFO iItem = %d, iSubItem = %d\n"), plvdi->item.iItem, plvdi->item.iSubItem);

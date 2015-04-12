@@ -125,6 +125,7 @@ extern regdata_hash_t regdata_hash;
 
 tstring mb2ts(const char *buf);
 string ts2mb(tstring &tstr);
+void trim_trailws(tstring &s);
 void splitpath_opt(tstring &path, tstring &opt);
 bool exec_browser(tstring &url);
 bool exec_browser_by_key(tstring &key);
@@ -168,6 +169,7 @@ bool WindowSubClass(HWND hWnd, FARPROC HookProc);
 #define WM_LABELCTL             (WM_APP+6)
 #define WM_LABELFILTER          (WM_APP+7)
 #define WM_CLEARFILTER          (WM_APP+8)
+#define WM_MSGPOPUP_NOTIFY      (WM_APP+9)
 
 #define NOTIFY_ENABLE           0x00000001
 #define NOTIFY_BALLOON          0x00000002
@@ -220,6 +222,8 @@ bool WindowSubClass(HWND hWnd, FARPROC HookProc);
 #define OPTION_ITEM_DC_ENABLE           _T("item_dc_enable")
 #define OPTION_ITEM_DC_SELECT           _T("item_dc_select")
 #define OPTION_VERCHK_ENABLE            _T("verchk_enable")
+#define OPTION_POPUP_ENABLE             _T("popup_enable")
+#define OPTION_POPUP_SELECT             _T("popup_select")
 #define DEF_OPTION_BALLOON_OPEN         0
 #define DEF_OPTION_AUTO_KEYNAME_ACQ     1
 #define DEF_OPTION_BALLOON_BOUYOMI      0
@@ -227,6 +231,8 @@ bool WindowSubClass(HWND hWnd, FARPROC HookProc);
 #define DEF_OPTION_ITEM_DC_ENABLE       0
 #define DEF_OPTION_ITEM_DC_SELECT       0
 #define DEF_OPTION_VERCHK_ENABLE        0
+#define DEF_OPTION_POPUP_ENABLE         0
+#define DEF_OPTION_POPUP_SELECT         3
 
 #define OPTION_DEFAULT_NOTIFY           _T("default_notify") 
 #define OPTION_BROWSER_PATH             _T("browser_path")
@@ -271,6 +277,8 @@ enum TIMERID {
     TID_SETTING = 0,
     TID_MINIMIZE,
     TID_REDRAW,
+    TID_POPUP,
+    TID_POPUP_FADE,
 };
 
 enum COLINDEX {

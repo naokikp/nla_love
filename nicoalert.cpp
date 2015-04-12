@@ -61,6 +61,16 @@ string ts2mb(tstring &tstr){
     return str;
 }
 
+// 文字列末尾の空白文字を除去
+void trim_trailws(tstring &s){
+    while(!s.empty()){
+        TCHAR c = s[s.size()-1];
+        if(c == ' ' || c == '\r' || c == '\n' || c == '\t'){
+            s.erase(s.end()-1);
+        } else break;
+    }
+}
+
 // プログラム起動パスのオプション分離
 void splitpath_opt(tstring &path, tstring &opt){
     opt = _T("");

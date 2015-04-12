@@ -10,7 +10,7 @@ static volatile bool isCmmExit = false;
 
 // 各種コールバック
 static void(*callback_alertinfo)(const c_alertinfo *) = NULL;
-static BOOL(*callback_msgpopup)(const TCHAR *) = NULL;
+static BOOL(*callback_msgpopup)(const tstring &msg, const tstring &link) = NULL;
 static void(*callback_msginfo)(const TCHAR *) = NULL;
 
 
@@ -38,13 +38,15 @@ static void _notice(int mode, const char *fmt, ...){
     ret = MultiByteToWideChar(CP_THREAD_ACP, MB_PRECOMPOSED, buf, -1, tbuf, ESIZEOF(tbuf));
     if(ret){
         if(mode&1 && callback_msginfo) callback_msginfo(tbuf);
-        if(mode&2 && callback_msgpopup) callback_msgpopup(tbuf);
+        if(mode&2 && callback_msgpopup) callback_msgpopup(tbuf, _T(""));
+        if(mode&4 && callback_msgpopup) callback_msgpopup(tbuf, NICOALERT_ONLINE_HELP);
     }
 
     va_end(ap);
 }
-#define notice(...)       _notice(1,__VA_ARGS__)
-#define notice_popup(...) _notice(3,__VA_ARGS__)
+#define notice(...)             _notice(1,__VA_ARGS__)
+#define notice_popup(...)       _notice(3,__VA_ARGS__)
+#define notice_popup_link(...)  _notice(5,__VA_ARGS__)
 
 
 // HTMLエンコーディングのデコード
@@ -737,6 +739,12 @@ int nicoalert_getlvname(tstring &lvid, tstring &lvname){
 
 // キー種別から各取得関数に振り分け
 int nicoalert_getkeyname(tstring &key, tstring &keyname){
+
+#ifdef DEBUG_NOT_CONNECT
+    notice("デバッグによる非接続モード(DEBUG_NOT_CONNECT)");
+    return CMM_MAINTENANCE;
+#endif
+
     if(key.substr(0, COID_PREFIX_LEN) == _T(COID_PREFIX)){
         return nicoalert_getconame(key, keyname);
     }
@@ -1045,6 +1053,11 @@ static void waitmsg(unsigned int wait){
 static int getversion(string &verstr){
     if(isCmmExit) return CMM_CONN_FAIL;
 
+#ifdef DEBUG_NOT_CONNECT
+    notice("デバッグによる非接続モード(DEBUG_NOT_CONNECT)");
+    return CMM_MAINTENANCE;
+#endif
+
     char respdata[1024*4];
     unsigned int respdatalen = 0;
     SOCKET s = INVALID_SOCKET;
@@ -1136,7 +1149,7 @@ static void verchk(){
         return;
     }
     if(verval(verstr.c_str()) > verval(VERSION_STRING_CHK)){
-        notice_popup("新しいバージョン(%s)があります。", verstr.c_str());
+        notice_popup_link("新しいバージョン(%s)があります。", verstr.c_str());
     } else {
         notice_popup("このバージョンは最新版です。");
     }
@@ -1196,7 +1209,7 @@ void commthread(void *arg){
 // cmmスレッド開始
 bool cmm_start(
     void(*cb_alertinfo)(const c_alertinfo *),
-    BOOL(*cb_msgpopup)(const TCHAR *),
+    BOOL(*cb_msgpopup)(const tstring &msg, const tstring &link),
     void(*cb_msginfo)(const TCHAR *) ){
     WSADATA wsaData;
     int ret;
