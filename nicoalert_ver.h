@@ -8,7 +8,7 @@
 #define VERSION_STRING_RSC  "1, 3, 9, 0"
 #define VERSION_STRING_CHK  "1.3.9"
 #define VERSION_LIC         "(C) 2012-2015 naoki.kp"
-#define UA_STRING           "NicoLiveAlert(Love)/20150412/1.4É¿"
+#define UA_STRING           "NicoLiveAlert(Love)/20150412/1.4beta"
 #define BETA_VERSION
 
 
