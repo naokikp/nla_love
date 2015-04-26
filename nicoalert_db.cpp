@@ -39,9 +39,14 @@ bool nicoalert_db::execsql(const TCHAR *sql){
     if(st != SQLITE_OK || !stmt){
         return false;
     }
-    while(sqlite3_step(stmt) != SQLITE_DONE);
+    bool result = true;
+    while(1){
+        int rc = sqlite3_step(stmt);
+        if(rc == SQLITE_DONE) break;
+        if(rc == SQLITE_ERROR){ result = false; break;}
+    }
     sqlite3_finalize(stmt);
-    return true;
+    return result;
 }
 
 // DB内に指定したテーブルが存在するか判定
@@ -146,19 +151,19 @@ bool nicoalert_db::savesetting(setting &setting_info){
         st = sqlite3_tprepare(dbh, sql, -1, &stmt, NULL);
         if(st != SQLITE_OK || !stmt) break;
 
-        bool insert_success = false;
+        int success_count = 0;
         FOREACH(it, setting_info){
             sqlite3_bind_ttext(stmt, 1, it->first.c_str(), -1, SQLITE_TRANSIENT);
             sqlite3_bind_ttext(stmt, 2, it->second.c_str(), -1, SQLITE_TRANSIENT);
             if(sqlite3_step(stmt) != SQLITE_DONE) break;
             if(sqlite3_reset(stmt) != SQLITE_OK) break;
             if(sqlite3_clear_bindings(stmt) != SQLITE_OK) break;
-            insert_success = true;
+            success_count++;
         }
         st = sqlite3_finalize(stmt);
         if(st != SQLITE_OK) break;
 
-        if(!insert_success) break;
+        if(setting_info.size() != success_count) break;
 
         if(!tr_commit()) break;
         success = true;

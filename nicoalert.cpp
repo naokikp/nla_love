@@ -61,6 +61,16 @@ string ts2mb(tstring &tstr){
     return str;
 }
 
+// 文字列末尾の空白文字を除去
+void trim_trailws(tstring &s){
+    while(!s.empty()){
+        TCHAR c = s[s.size()-1];
+        if(c == ' ' || c == '\r' || c == '\n' || c == '\t'){
+            s.erase(s.end()-1);
+        } else break;
+    }
+}
+
 // プログラム起動パスのオプション分離
 void splitpath_opt(tstring &path, tstring &opt){
     opt = _T("");
@@ -162,8 +172,10 @@ unsigned int ReadOptionInt(const TCHAR *key, unsigned int default_val){
 // オプションパラメータ書き込み(文字列)
 void SaveOptionString(const TCHAR *key, const TCHAR *value){
     setting_info.lock();
-    setting_info[key] = value;
-    setting_info_darty = true;
+    if(setting_info[key] != value){
+        setting_info[key] = value;
+        setting_info_darty = true;
+    }
     setting_info.unlock();
 }
 
@@ -177,8 +189,10 @@ void SaveOptionInt(const TCHAR *key, unsigned int value){
 // オプションパラメータ削除
 void DeleteOption(const TCHAR *key){
     setting_info.lock();
-    setting_info.erase(key);
-    setting_info_darty = true;
+    if(setting_info.count(key)){
+        setting_info.erase(key);
+        setting_info_darty = true;
+    }
     setting_info.unlock();
 }
 

@@ -28,6 +28,10 @@ using namespace rapidxml;
 #define ALERT_GETSTREAMINFO_API_SERVER   "live.nicovideo.jp"
 #define ALERT_GETSTREAMINFO_API_PATH     "/api/getstreaminfo/"
 
+// バージョンチェック
+#define VERSION_CHECK_SERVER        "nlalove.web.fc2.com"
+#define VERSION_CHECK_PATH          "/version.txt"
+
 
 #define CMM_ERROR_WAITTIME          15      // エラー時待機時間(秒)
 #define CMM_ERROR_WAITTIME_LIMIT    300     // エラー時待機時間最大値(秒)
@@ -47,7 +51,7 @@ enum cmm_errno {
     CMM_MAINTENANCE,
 };
 
-bool cmm_start( void(*)(const c_alertinfo *), void(*)(const TCHAR *) );
+bool cmm_start( void(*)(const c_alertinfo *), BOOL(*)(const tstring &msg, const tstring &link), void(*)(const TCHAR *) );
 bool cmm_exit(void);
 
 int nicoalert_getstreaminfo(tstring &lvid, c_streaminfo &si);

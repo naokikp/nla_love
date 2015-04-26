@@ -41,6 +41,7 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <MinimalRebuild>false</MinimalRebuild>
       <PreprocessorDefinitions>WIN32;_DEBUG;_UNICODE;UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <BrowseInformation>true</BrowseInformation>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -108,7 +109,9 @@ c:\tools\upx\upx.exe $(SolutionDir)\$(TargetFileName)</Command>
     <ClCompile Include="nicoalert_ole.cpp" />
     <ClCompile Include="nicoalert_snd.cpp" />
     <ClCompile Include="nicoalert_wnd.cpp" />
-    <ClCompile Include="sqlite3\sqlite3.c" />
+    <ClCompile Include="sqlite3\sqlite3.c">
+      <BrowseInformation Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</BrowseInformation>
+    </ClCompile>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -10,6 +10,7 @@ static volatile bool isCmmExit = false;
 
 // 各種コールバック
 static void(*callback_alertinfo)(const c_alertinfo *) = NULL;
+static BOOL(*callback_msgpopup)(const tstring &msg, const tstring &link) = NULL;
 static void(*callback_msginfo)(const TCHAR *) = NULL;
 
 
@@ -26,7 +27,7 @@ static void _dbg_mb(const char *fmt, ...){
 }
 
 // メインウィンドウ通知(マルチバイト用)
-static void notice(const char *fmt, ...){
+static void _notice(int mode, const char *fmt, ...){
     char buf[1024];
     TCHAR tbuf[1024];
     int ret;
@@ -35,12 +36,18 @@ static void notice(const char *fmt, ...){
     vsprintf_s(buf, fmt, ap);
 
     ret = MultiByteToWideChar(CP_THREAD_ACP, MB_PRECOMPOSED, buf, -1, tbuf, ESIZEOF(tbuf));
-    if(ret && callback_msginfo){
-        callback_msginfo(tbuf);
+    if(ret){
+        if(mode&1 && callback_msginfo) callback_msginfo(tbuf);
+        if(mode&2 && callback_msgpopup) callback_msgpopup(tbuf, _T(""));
+        if(mode&4 && callback_msgpopup) callback_msgpopup(tbuf, NICOALERT_ONLINE_HELP);
     }
 
     va_end(ap);
 }
+#define notice(...)             _notice(1,__VA_ARGS__)
+#define notice_popup(...)       _notice(3,__VA_ARGS__)
+#define notice_popup_link(...)  _notice(5,__VA_ARGS__)
+
 
 // HTMLエンコーディングのデコード
 static void htmldecode(tstring &str){
@@ -732,6 +739,12 @@ int nicoalert_getlvname(tstring &lvid, tstring &lvname){
 
 // キー種別から各取得関数に振り分け
 int nicoalert_getkeyname(tstring &key, tstring &keyname){
+
+#ifdef DEBUG_NOT_CONNECT
+    notice("デバッグによる非接続モード(DEBUG_NOT_CONNECT)");
+    return CMM_MAINTENANCE;
+#endif
+
     if(key.substr(0, COID_PREFIX_LEN) == _T(COID_PREFIX)){
         return nicoalert_getconame(key, keyname);
     }
@@ -1037,11 +1050,122 @@ static void waitmsg(unsigned int wait){
     }
 }
 
+static int getversion(string &verstr){
+    if(isCmmExit) return CMM_CONN_FAIL;
+
+#ifdef DEBUG_NOT_CONNECT
+    notice("デバッグによる非接続モード(DEBUG_NOT_CONNECT)");
+    return CMM_MAINTENANCE;
+#endif
+
+    char respdata[1024*4];
+    unsigned int respdatalen = 0;
+    SOCKET s = INVALID_SOCKET;
+
+    s = tcp_connect(VERSION_CHECK_SERVER, "http");
+    if(s == INVALID_SOCKET){
+        return CMM_CONN_FAIL;
+    }
+
+    string http_request;
+    char buf[128];
+    sprintf_s(buf, "GET %s HTTP/1.0\r\n", VERSION_CHECK_PATH);
+    http_request += buf;
+    sprintf_s(buf, "Host: %s\r\n", VERSION_CHECK_SERVER);
+    http_request += buf;
+    sprintf_s(buf, "User-Agent: %s\r\n", UA_STRING);
+    http_request += buf;
+    sprintf_s(buf, "\r\n");
+    http_request += buf;
+
+    int recvlen = tcp_gethttp(s, http_request, respdata, sizeof(respdata)-1);
+
+    closesocket(s); s = INVALID_SOCKET;
+    if(recvlen < 0) return CMM_TRANS_FAIL;
+    respdata[recvlen] = '\0';
+
+    char *htmlbody = strstr(respdata, "\r\n\r\n");
+    if(htmlbody == NULL){
+        // HTMLヘッダなし
+        return CMM_ILL_DATA;
+    }
+    htmlbody += 4;
+    int httphdrsize = htmlbody - respdata;
+    int httpbodysize = recvlen - httphdrsize;
+
+    if(httpbodysize > 15) return CMM_ILL_DATA;
+
+    // sanity check
+    for(int i = 0; i < httpbodysize; i++){
+        if(isdigit(htmlbody[i]) || htmlbody[i] == '.') continue;
+        if(htmlbody[i] == '\r' || htmlbody[i] == '\n'){
+            htmlbody[i] = 0; break;
+        }
+        return CMM_ILL_DATA;
+    }
+    verstr = htmlbody;
+
+    return CMM_SUCCESS;
+}
+
+static unsigned int verval(const char *ver){
+    int l = strlen(ver);
+    int v[4], c = 0;
+    v[0]=v[1]=v[2]=v[3]=0;
+
+    bool f = false;
+    for(int i = 0; i < l; i++){
+        if(!f && isdigit(ver[i])){
+            v[c] = atoi(ver+i);
+            if(v[c]<0) v[c] = 0;
+            if(v[c]>255) v[c] = 255;
+            c++;
+            if(c >= 4) break;
+            f = true;
+        }
+        else if(!isdigit(ver[i])) f = false;
+    }
+    return v[0]<<24|v[1]<<16|v[2]<<8|v[3];
+}
+
+// バージョンチェック
+static void verchk(){
+    string verstr;
+    notice("バージョンチェック中です。");
+    int ret = getversion(verstr);
+    if(ret != CMM_SUCCESS){
+        switch(ret){
+        case CMM_CONN_FAIL:
+            notice("接続に失敗しました。");
+            break;
+        case CMM_TRANS_FAIL:
+            notice("送受信に失敗しました。");
+            break;
+        case CMM_ILL_DATA:
+            notice("受信データが不正です。");
+            break;
+        }
+        notice_popup("バージョンチェック時にエラーが発生しました。");
+        return;
+    }
+    if(verval(verstr.c_str()) > verval(VERSION_STRING_CHK)){
+        notice_popup_link("新しいバージョン(%s)があります。", verstr.c_str());
+    } else {
+        notice_popup("このバージョンは最新版です。");
+    }
+}
+
+
 // 通信スレッド
 void commthread(void *arg){
     unsigned int wait;
     unsigned int errcount = 0;
     time_t lasterr = 0;
+
+    // バージョンチェック
+    if(ReadOptionInt(OPTION_VERCHK_ENABLE, DEF_OPTION_VERCHK_ENABLE)){
+        verchk();
+    }
 
     // 登録追加されるまで待機
     while(!isCmmExit){
@@ -1083,7 +1207,10 @@ void commthread(void *arg){
 }
 
 // cmmスレッド開始
-bool cmm_start(void(*cb_alertinfo)(const c_alertinfo *), void(*cb_msginfo)(const TCHAR *) ){
+bool cmm_start(
+    void(*cb_alertinfo)(const c_alertinfo *),
+    BOOL(*cb_msgpopup)(const tstring &msg, const tstring &link),
+    void(*cb_msginfo)(const TCHAR *) ){
     WSADATA wsaData;
     int ret;
 
@@ -1093,6 +1220,7 @@ bool cmm_start(void(*cb_alertinfo)(const c_alertinfo *), void(*cb_msginfo)(const
     }
 
     callback_alertinfo = cb_alertinfo;
+    callback_msgpopup = cb_msgpopup;
     callback_msginfo = cb_msginfo;
 
     hCmmExitEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
@@ -1111,6 +1239,7 @@ bool cmm_exit(void){
     DWORD ret;
 
     callback_alertinfo = NULL;
+    callback_msgpopup = NULL;
     callback_msginfo = NULL;
 
     while(waitcount){
