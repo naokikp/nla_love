@@ -1741,6 +1741,9 @@ static LRESULT CALLBACK WndProcPopup(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp){
             HDC hDeskDC = GetDC(hWnd);
             pmpwi->hDC = CreateCompatibleDC(hDeskDC);
 
+            // テキストサイズにあわせてウィンドウ背景とテキスト描画
+            HFONT hFontOld = SelectFont(pmpwi->hDC, hFontPopupText);
+
             // テキスト描画モード
             UINT drawmode = DT_NOPREFIX | DT_WORDBREAK | 
                 DT_NOFULLWIDTHCHARBREAK | DT_END_ELLIPSIS | DT_EDITCONTROL;
@@ -1764,7 +1767,6 @@ static LRESULT CALLBACK WndProcPopup(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp){
             SelectBitmap(pmpwi->hDC, pmpwi->hBmp);
             ReleaseDC(hWnd, hDeskDC);
 
-            // テキストサイズにあわせてウィンドウ背景とテキスト描画
             SetWindowPos(hWnd, HWND_TOPMOST, pmpwi->x, pmpwi->y, w, h, 0);
 
             BITMAP bmp;
@@ -1788,7 +1790,6 @@ static LRESULT CALLBACK WndProcPopup(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp){
             DeletePen(hPen);
             DeletePen(hPen2);
 
-            HFONT hFontOld = SelectFont(pmpwi->hDC, hFontPopupText);
             SetTextColor(pmpwi->hDC, RGB(0,0,0));
             SetBkMode(pmpwi->hDC, TRANSPARENT);
             DrawText(pmpwi->hDC, pmpwi->msg.c_str(), -1, &rctxt, drawmode);
@@ -1850,6 +1851,19 @@ static LRESULT CALLBACK WndProcPopup(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp){
                 pmpwi->hDC,
                 ps.rcPaint.left, ps.rcPaint.top,
                 SRCCOPY);
+#ifdef _DEBUG
+            RECT rctxt;
+            GetClientRect(hWnd, &rctxt);
+            rctxt.left = rctxt.top = MSGPOPUPWINDOW_TEXT_MARGIN;
+            HFONT hFontOld = SelectFont(ps.hdc, hFontPopupText);
+            DrawText(ps.hdc, pmpwi->msg.c_str(), -1, &rctxt, DT_NOPREFIX | DT_WORDBREAK | 
+                DT_NOFULLWIDTHCHARBREAK | DT_END_ELLIPSIS | DT_EDITCONTROL | DT_CALCRECT);
+            DrawText(ps.hdc, pmpwi->msg.c_str(), -1, &rctxt, DT_NOPREFIX | DT_WORDBREAK | 
+                DT_NOFULLWIDTHCHARBREAK | DT_END_ELLIPSIS | DT_EDITCONTROL);
+            SelectFont(ps.hdc, hFontOld); 
+            MoveToEx(ps.hdc, rctxt.left, rctxt.top, NULL);
+            LineTo(ps.hdc, rctxt.right, rctxt.bottom);
+#endif
             EndPaint(hWnd, &ps);
         }
         break;
