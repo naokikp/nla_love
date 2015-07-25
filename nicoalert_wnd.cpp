@@ -1470,11 +1470,15 @@ static int CALLBACK fnCompare_(LPARAM idx1, LPARAM idx2, LPARAM col){
         case COLINDEX_LASTSTART:
             {
                 time_t td = cr2->last_start - cr1->last_start;
-                ret = 0; if(td < 0) ret = -1; else ret = 1;
+                ret = 0; if(td < 0) ret = -1; else if(td > 0) ret = 1;
             }
             break;
         case COLINDEX_LABEL:
             ret = cr1->label - cr2->label; break;
+        }
+        // 2次ソートキーとして登録名でソート
+        if(ret == 0){
+            ret = cr1->key_name.compare(cr2->key_name);
         }
     }
 
