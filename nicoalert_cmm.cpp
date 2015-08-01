@@ -723,7 +723,11 @@ int nicoalert_getlvname(tstring &lvid, tstring &lvname){
             }
         }
         int loc = lvname.rfind(_T(" - ニコニコ生放送"));
-        if(loc == string::npos) break;
+        if(loc == string::npos){
+            // 有料放送等でチャンネルに飛ばされる場合がある
+            loc = lvname.rfind(_T(" - ニコニコチャンネル"));
+            if(loc == string::npos) break;
+        }
         lvname.replace(loc, lvname.size(), _T(""));
 
         htmldecode(lvname);
