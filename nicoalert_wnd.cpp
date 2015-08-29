@@ -827,6 +827,8 @@ static BOOL CALLBACK RegSetDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp)
                     SetDlgItemText(hDlgWnd, IDC_RS_EDIT_KEYNAME, rd->key_name.c_str());
                     SetDlgItemText(hDlgWnd, IDC_RS_EDIT_MEMO,    rd->memo.c_str());
 
+                    PostMessage(GetDlgItem(hDlgWnd, IDC_RS_EDIT_KEYNAME), EM_SETSEL, 0, 0);
+
                     if(rd->key.substr(0,USERID_PREFIX_LEN) != _T(USERID_PREFIX)){
                         ShowWindow(GetDlgItem(hDlgWnd, IDC_RS_CB_KEYNAME), SW_HIDE);
                     } else {
@@ -915,6 +917,20 @@ static BOOL CALLBACK RegSetDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp)
 
     case WM_COMMAND:
         switch(LOWORD(wp)){
+
+#if 0
+        case IDC_RS_EDIT_KEYNAME:
+        case IDC_RS_EDIT_MEMO:
+            {
+                // フォーカスが外れた際に表示を先頭に戻す
+                if(HIWORD(wp) == EN_KILLFOCUS){
+                    SendMessage(GetDlgItem(hDlgWnd, LOWORD(wp)), EM_SETSEL, 0, 0);
+                    return TRUE;
+                }
+            }
+            break;
+#endif
+
         case IDC_RS_CB_KEYNAME:
             if(HIWORD(wp) == BN_CLICKED){
                 // 登録名変更ボタン押下によりエディットボックス有効無効切り替え
