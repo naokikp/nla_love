@@ -180,7 +180,7 @@ bool WindowSubClass(HWND hWnd, FARPROC HookProc);
 
 #define NICOLIVE_LVID_URL       _T("http://live.nicovideo.jp/watch/")
 #define NICOLIVE_COID_URL       _T("http://com.nicovideo.jp/community/")
-#define NICOLIVE_CHID_URL       _T("http://ch.nicovideo.jp/lives/")
+#define NICOLIVE_CHID_URL       _T("http://ch.nicovideo.jp/")
 #define NICOLIVE_USERID_URL     _T("http://www.nicovideo.jp/")
 
 #define NICOALERT_ONLINE_HELP   _T("http://nlalove.web.fc2.com/")
