@@ -128,6 +128,7 @@ extern regdata_hash_t regdata_hash;
 tstring mb2ts(const char *buf);
 string ts2mb(tstring &tstr);
 void trim_trailws(tstring &s);
+void trim_leadws(tstring &s);
 void splitpath_opt(tstring &path, tstring &opt);
 bool exec_browser(tstring &url);
 bool exec_browser_by_key(tstring &key);

@@ -580,18 +580,26 @@ int nicoalert_getconame(tstring &coid, tstring &coname){
     }
     htmlbody += 4;
 
-    // HTMLタグ解析 <h1>コミュニティ名</h1>
+    // HTMLタグ解析 <meta property="og:title" content="コミュニティ名-ニコニコミュニティ">
     bool flag = false;
     do {
-        char *p_h1_o = strstr(htmlbody, "<h1 ");
-        if(p_h1_o == NULL) break;
-        char *p_h1_c = strstr(p_h1_o, ">");
-        if(p_h1_c == NULL) break;
-        p_h1_c++;
-        char *p_sh1_o = strstr(p_h1_c, "</h1>");
-        if(p_sh1_o == NULL) break;
-        *p_sh1_o = '\0';
-        coname = mb2ts(p_h1_c);
+        const char *keyword = "<meta property=\"og:title\" content=\"";
+
+        char *p_str = strstr(htmlbody, keyword);
+        if(p_str == NULL) break;
+        p_str += strlen(keyword);
+        char *p_end = strstr(p_str, "\">");
+        if(p_end == NULL) break;
+        *p_end = '\0';
+        coname = mb2ts(p_str);
+
+        trim_leadws(coname);
+        trim_trailws(coname);
+
+        int loc = coname.rfind(_T("-ニコニコミュニティ"));
+        if(loc == string::npos) break;
+        coname.replace(loc, coname.size(), _T(""));
+
         htmldecode(coname);
         flag = true;
     } while(0);
@@ -612,14 +620,9 @@ int nicoalert_getconame(tstring &coid, tstring &coname){
         *p_te = '\0';
         coname = mb2ts(p_ts);
 
-        unsigned int i = 0;
-        while(i < coname.size()){
-            if(coname[i] == '\r' || coname[i] == '\n'){
-                coname.replace(i, 1, _T(""));
-            } else {
-                i++;
-            }
-        }
+        trim_leadws(coname);
+        trim_trailws(coname);
+
         int loc = coname.rfind(_T("-ニコニコミュニティ"));
         if(loc == string::npos) break;
         coname.replace(loc, coname.size(), _T(""));
