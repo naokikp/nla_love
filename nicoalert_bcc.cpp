@@ -24,6 +24,13 @@ static void(*callback_msginfo)(const TCHAR *) = NULL;
 
 static class nicoalert_snd nasnd;
 
+#ifdef _DEBUG
+static volatile int DEBUG_bcc_check_strcnt = 0;
+static volatile int DEBUG_bcc_check_endcnt = 0;
+static volatile int DEBUG_bcc_check_cnkcnt = 0;
+static volatile int DEBUG_bcc_check_errcnt = 0;
+#endif
+
 // アラート通知受付(callback)
 void alertinfo_ind(const c_alertinfo *ai){
     alinfo.lock();
@@ -186,9 +193,10 @@ static void bcc_check(int infotype, tstring &lvid, unsigned int idx[3]){
                     if(nicoalert_getkeyname(lvid, keyname) == CMM_SUCCESS) break;
                     keyname = _T("放送タイトル取得に失敗しました。");
                     //callback_msginfo(keyname.c_str());
+
                     failcnt++;
                     if(failcnt >= 5) break;
-                    Sleep(1000);
+                    Sleep(1000*failcnt);
                 }
                 msg = msg + _T("【") + keyname + _T("】\n");
                 msg2 = msg2 + keyname;
@@ -257,10 +265,13 @@ static void bcc_check(int infotype, tstring &lvid, unsigned int idx[3]){
     }
 }
 
+
 // アラート通知データ処理スレッド
 static void bcc_check_thread(void *arg){
     while(!isBCSCExit){
         WaitForSingleObject(hBCSCEvent, INFINITE);
+
+        _DEBUGDO(DEBUG_bcc_check_strcnt++);
         while(!isBCSCExit){
 
             // アラート通知データキューからデキュー
@@ -313,6 +324,7 @@ static void bcc_check_thread(void *arg){
                 bcc_check(ai.infotype, ai.lvid, idx);
             }
         }
+        _DEBUGDO(DEBUG_bcc_check_endcnt++);
     }
 
     bcc_queue.clear();
@@ -365,5 +377,22 @@ bool bcc_exit(void){
     alinfo.clear();
     alinfo.unlock();
 
+    return true;
+}
+
+bool bcc_check(void){
+#ifdef _DEBUG
+    if(DEBUG_bcc_check_strcnt != DEBUG_bcc_check_endcnt){
+        if(DEBUG_bcc_check_strcnt == DEBUG_bcc_check_cnkcnt){
+            DEBUG_bcc_check_errcnt++;
+        }
+        DEBUG_bcc_check_cnkcnt = DEBUG_bcc_check_strcnt;
+    } else {
+        DEBUG_bcc_check_errcnt = 0;
+    }
+    if(DEBUG_bcc_check_errcnt >= 3){
+        return false;
+    }
+#endif
     return true;
 }

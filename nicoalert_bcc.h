@@ -11,5 +11,6 @@ bool bcc_startstat(unsigned int *count, unsigned int *period);
 
 bool bcc_start( void(*)(unsigned int, BOOL), BOOL(*)(const tstring &msg, const tstring &link), void(*)(const TCHAR *) );
 bool bcc_exit(void);
+bool bcc_check(void);
 
 #endif

@@ -11,5 +11,6 @@ void con_start(void);
 
 bool con_start( void(*)(unsigned int, BOOL), void(*)(const TCHAR *) );
 bool con_exit(void);
+bool con_check(void);
 
 #endif

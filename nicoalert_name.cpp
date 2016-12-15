@@ -21,6 +21,12 @@ static deque_ts<unsigned int> acq_dbidx;
 // 取得タイミング制御用キュー
 static deque<time_t> acq_check;
 
+#ifdef _DEBUG
+static volatile int DEBUG_con_check_strcnt = 0;
+static volatile int DEBUG_con_check_endcnt = 0;
+static volatile int DEBUG_con_check_cnkcnt = 0;
+static volatile int DEBUG_con_check_errcnt = 0;
+#endif
 
 static void keyname_acq_nummsg(unsigned int num, bool flag){
     if(!flag){
@@ -50,21 +56,24 @@ static void keyname_acq_thread(void *arg){
 
             // キー名称取得要求インデックスキューからデキュー
             unsigned int dbidx;
+            bool found = false;
+            _DEBUGDO(DEBUG_con_check_strcnt++);
             acq_dbidx.lock();
             _dbg(_T("acq_dbidx.size() = %d\n"), acq_dbidx.size());
             if(acq_dbidx.size()){
                 dbidx = acq_dbidx.front();
                 acq_dbidx.pop_front();
-            } else {
-                acq_dbidx.unlock();
-                break;
+                found = true;
             }
             acq_dbidx.unlock();
+            _DEBUGDO(DEBUG_con_check_endcnt++);
+
+            if(!found) break;
 
             // 登録アイテムDBを検索し、
             // 自動取得済みフラグが立っている場合は何もしない
             tstring key = _T("");
-            tstring keyname;
+            _DEBUGDO(DEBUG_con_check_strcnt++);
             regdata_info.lock();
             ITER(regdata_info) it = regdata_info.find(dbidx);
             if(it != regdata_info.end()){
@@ -73,11 +82,16 @@ static void keyname_acq_thread(void *arg){
                 }
             }
             regdata_info.unlock();
+            _DEBUGDO(DEBUG_con_check_endcnt++);
+
             if(key == _T("")){
                 keyname_acq_nummsg(acq_dbidx.size(), false);
                 continue;
             }
 
+            _DEBUGDO(DEBUG_con_check_strcnt++);
+
+            tstring keyname;
             // キー名称取得要求
             if(nicoalert_getkeyname(key, keyname) != CMM_SUCCESS){
                 keyname = _T("<取得失敗>");
@@ -106,6 +120,8 @@ static void keyname_acq_thread(void *arg){
                 callback_alinfo_ntf(dbidx, FALSE);
             }
             keyname_acq_nummsg(acq_dbidx.size(), false);
+
+            _DEBUGDO(DEBUG_con_check_endcnt++);
 
             // 自動取得間隔の制御
             //  取得数が ACQ_CHECK_COUNT に達するまでは最低wait(1秒)
@@ -199,5 +215,22 @@ bool con_exit(void){
     acq_dbidx.clear();
     acq_dbidx.unlock();
 
+    return true;
+}
+
+bool con_check(void){
+#ifdef _DEBUG
+    if(DEBUG_con_check_strcnt != DEBUG_con_check_endcnt){
+        if(DEBUG_con_check_strcnt == DEBUG_con_check_cnkcnt){
+            DEBUG_con_check_errcnt++;
+        }
+        DEBUG_con_check_cnkcnt = DEBUG_con_check_strcnt;
+    } else {
+        DEBUG_con_check_errcnt = 0;
+    }
+    if(DEBUG_con_check_errcnt >= 3){
+        return false;
+    }
+#endif
     return true;
 }

@@ -325,7 +325,7 @@ static void SetRedrawTimer(HWND hWnd){
     if(!RedrawTimer.empty()){
         time_t t = RedrawTimer.front() - now + 1;
         SetTimer(hWnd, TID_REDRAW, (UINT)(t * 1000), NULL);
-        _dbg(_T("SetRedrawTimer : settimer %u\n"), t * 1000);
+        _dbg(_T("SetRedrawTimer : settimer %u sec\n"), t);
     } else {
         KillTimer(hWnd, TID_REDRAW);
         _dbg(_T("SetRedrawTimer : killtimer\n"));
@@ -1810,6 +1810,10 @@ static LRESULT CALLBACK WndProcPopup(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp){
             DeletePen(hPen);
             DeletePen(hPen2);
 
+#ifdef _DEBUG
+            FrameRect(pmpwi->hDC, &rctxt, GetStockBrush(GRAY_BRUSH));
+#endif
+
             SetTextColor(pmpwi->hDC, RGB(0,0,0));
             SetBkMode(pmpwi->hDC, TRANSPARENT);
             DrawText(pmpwi->hDC, pmpwi->msg.c_str(), -1, &rctxt, drawmode);
@@ -1871,19 +1875,6 @@ static LRESULT CALLBACK WndProcPopup(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp){
                 pmpwi->hDC,
                 ps.rcPaint.left, ps.rcPaint.top,
                 SRCCOPY);
-#ifdef _DEBUG
-            RECT rctxt;
-            GetClientRect(hWnd, &rctxt);
-            rctxt.left = rctxt.top = MSGPOPUPWINDOW_TEXT_MARGIN;
-            HFONT hFontOld = SelectFont(ps.hdc, hFontPopupText);
-            DrawText(ps.hdc, pmpwi->msg.c_str(), -1, &rctxt, DT_NOPREFIX | DT_WORDBREAK | 
-                DT_NOFULLWIDTHCHARBREAK | DT_END_ELLIPSIS | DT_EDITCONTROL | DT_CALCRECT);
-            DrawText(ps.hdc, pmpwi->msg.c_str(), -1, &rctxt, DT_NOPREFIX | DT_WORDBREAK | 
-                DT_NOFULLWIDTHCHARBREAK | DT_END_ELLIPSIS | DT_EDITCONTROL);
-            SelectFont(ps.hdc, hFontOld); 
-            MoveToEx(ps.hdc, rctxt.left, rctxt.top, NULL);
-            LineTo(ps.hdc, rctxt.right, rctxt.bottom);
-#endif
             EndPaint(hWnd, &ps);
         }
         break;
@@ -2680,9 +2671,40 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
 
         case IDM_DEBUGPOPUP:
             {
-                nawnd_msgpopup(_T("[aaaaaa][bbbbbb][cccccc]\n[dddddd][eeeeee][ffffff][gggggg]\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz"), _T(""));
-                nawnd_msgpopup(_T("[aaaaaa][bbbbbb][cccccc]\n[dddddd][eeeeee][ffffff][gggggg]\nabcdefghijklmnopqrstuvwxyz日本語abcdefghijklmnopqrstuvwxyz"), _T(""));
-                nawnd_msgpopup(_T("[aaaaaa][bbbbbb][cccccc]\n[dddddd][eeeeee][ffffff][gggggg]\nabcdefghijklmnopqrstuvwxyz\r\nabc\r\ndefghijklmnopqrstuvwxyz"), _T(""));
+                //nawnd_msgpopup(_T("[aaaaaa][bbbbbb][cccccc]\n[dddddd][eeeeee][ffffff][gggggg]\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz"), _T(""));
+                //nawnd_msgpopup(_T("[aaaaaa][bbbbbb][cccccc]\n[dddddd][eeeeee][ffffff][gggggg]\nabcdefghijklmnopqrstuvwxyz日本語abcdefghijklmnopqrstuvwxyz"), _T(""));
+                //nawnd_msgpopup(_T("[aaaaaa][bbbbbb][cccccc]\n[dddddd][eeeeee][ffffff][gggggg]\nabcdefghijklmnopqrstuvwxyz\r\nabc\r\ndefghijklmnopqrstuvwxyz"), _T(""));
+
+                // キー種別に応じたページオープン要求
+                if(ListView_GetSelectedCount(hWndListView) == 1){
+                    do {
+                        int lvidx = ListView_GetNextItem(hWndListView, -1, LVNI_ALL | LVNI_SELECTED);
+                        if(lvidx < 0) break;
+                        unsigned int dbidx = lvidx2dbidx(hWndListView, lvidx);
+                        if(dbidx == 0) break;
+
+                        tstring key_name;
+                        regdata_info.lock();
+                        ITER(regdata_info) it = regdata_info.find(dbidx);
+                        if(it != regdata_info.end()){
+                            key_name = it->second.key_name;
+                        }
+                        regdata_info.unlock();
+
+                        if(key_name.size() > 0){
+                            size_t str = key_name.find_first_of(_T('「'));
+                            if(str != tstring::npos){
+                                size_t end = key_name.find_first_of(_T('」'), str+1);
+                                if(end != tstring::npos){
+                                    key_name = key_name.substr(str+1, end-str-1);
+                                    exec_browser(tstring(_T("http://live.nicovideo.jp/search?filter=:official::reserved:&keyword=")) + key_name);
+                                    break;
+                                }
+                            }
+                        }
+
+                    } while(0);
+                }
             }
             break;
 #endif
@@ -3463,7 +3485,7 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
             // 各処理スレッド停止
             _dbg(_T("con_exit()\n"));
             con_exit();
-            _dbg(_T("com_exit()\n"));
+            _dbg(_T("cmm_exit()\n"));
             cmm_exit();
             _dbg(_T("bcc_exit()\n"));
             bcc_exit();
@@ -3503,6 +3525,28 @@ LRESULT CALLBACK MainDlgProc(HWND hDlgWnd, UINT msg, WPARAM wp, LPARAM lp){
                     setting_info_darty = false;
                 }
             }
+#ifdef _DEBUG
+            {
+                const TCHAR *msg = NULL;
+                if(!bcc_check()){
+                    msg = _T("デバッグ情報 : bccスレッドが停止しています。");
+                }
+                if(!cmm_check()){
+                    msg = _T("デバッグ情報 : cmmスレッドが停止しています。");
+                }
+                if(!con_check()){
+                    msg = _T("デバッグ情報 : conスレッドが停止しています。");
+                }
+                if(msg){
+                    static DWORD LockoutTimer;
+                    if(LockoutTimer < GetTickCount()){
+                        msginfo_ind(msg);
+                        nawnd_msgpopup(msg, _T(""));
+                        LockoutTimer = GetTickCount() + 60*1000;
+                    }
+                }
+            }
+#endif
 #if 0
             unsigned int count, period;
             if(bcc_startstat(&count, &period)){

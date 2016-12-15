@@ -75,6 +75,7 @@
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <GenerateMapFile>true</GenerateMapFile>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
     </Link>
     <PostBuildEvent>
       <Command>copy /y $(TargetPath) $(SolutionDir)
