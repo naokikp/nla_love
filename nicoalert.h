@@ -37,8 +37,10 @@ extern HINSTANCE hInst;
 #ifdef _DEBUG
 //#define DEBUG_NOT_CONNECT
 #define _DEBUGT(X) _T(X)
+#define _DEBUGDO(...) do{ (__VA_ARGS__); }while(0)
 #else
 #define _DEBUGT(X) /* */
+#define _DEBUGDO(...) do{ 0; }while(0)
 #endif
 
 void _dbg(const TCHAR *fmt, ...);
@@ -126,6 +128,7 @@ extern regdata_hash_t regdata_hash;
 tstring mb2ts(const char *buf);
 string ts2mb(tstring &tstr);
 void trim_trailws(tstring &s);
+void trim_leadws(tstring &s);
 void splitpath_opt(tstring &path, tstring &opt);
 bool exec_browser(tstring &url);
 bool exec_browser_by_key(tstring &key);

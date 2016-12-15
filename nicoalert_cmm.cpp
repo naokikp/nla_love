@@ -13,6 +13,12 @@ static void(*callback_alertinfo)(const c_alertinfo *) = NULL;
 static BOOL(*callback_msgpopup)(const tstring &msg, const tstring &link) = NULL;
 static void(*callback_msginfo)(const TCHAR *) = NULL;
 
+#ifdef _DEBUG
+static volatile int DEBUG_cmm_check_strcnt = 0;
+static volatile int DEBUG_cmm_check_endcnt = 0;
+static volatile int DEBUG_cmm_check_cnkcnt = 0;
+static volatile int DEBUG_cmm_check_errcnt = 0;
+#endif
 
 // マルチバイト用デバッグ出力
 static void _dbg_mb(const char *fmt, ...){
@@ -362,22 +368,35 @@ static int tcp_gethttp(SOCKET s, string &http_request, char *buf, unsigned int b
         int ret;
         ret = send(s, http_request.c_str(), http_request.length(), 0);
         if(ret < 0) break;
-        while(1){
+        int TOcnt = 30;
+        while(TOcnt-- > 0){
             if(bufsize == 0){
+                // バッファ不足
                 recv_err = false;
                 break;
             }
-            ret = recv(s, buf, bufsize, 0);
-            if(ret < 0) break;
-            if(ret == 0){
+            timeval timeout = { 1, 0 };
+            fd_set rfds;
+            FD_ZERO(&rfds);
+            FD_SET(s, &rfds);
+            ret = select(0, &rfds, NULL, NULL, &timeout);
+            if(ret == SOCKET_ERROR){
                 recv_err = false;
                 break;
             }
-            unsigned int len = ret;
-            if(len > bufsize) len = bufsize;
-            respdatalen += len;
-            buf += len;
-            bufsize -= len;
+            if(FD_ISSET(s, &rfds)){
+                ret = recv(s, buf, bufsize, 0);
+                if(ret < 0) break;
+                if(ret == 0){
+                    recv_err = false;
+                    break;
+                }
+                unsigned int len = ret;
+                if(len > bufsize) len = bufsize;
+                respdatalen += len;
+                buf += len;
+                bufsize -= len;
+            }
         }
     } while(0);
 
@@ -395,6 +414,8 @@ static int gethtml(const char *server, const char *urlpath, char *respdata, unsi
     int recvlen = -1;
 
     while(redirectcnt--){
+
+        _dbg_mb("req = http://%s%s\n", server, urlpath);
 
         // 対象サーバに接続
         s = tcp_connect(server, "http");
@@ -559,18 +580,26 @@ int nicoalert_getconame(tstring &coid, tstring &coname){
     }
     htmlbody += 4;
 
-    // HTMLタグ解析 <h1>コミュニティ名</h1>
+    // HTMLタグ解析 <meta property="og:title" content="コミュニティ名-ニコニコミュニティ">
     bool flag = false;
     do {
-        char *p_h1_o = strstr(htmlbody, "<h1 ");
-        if(p_h1_o == NULL) break;
-        char *p_h1_c = strstr(p_h1_o, ">");
-        if(p_h1_c == NULL) break;
-        p_h1_c++;
-        char *p_sh1_o = strstr(p_h1_c, "</h1>");
-        if(p_sh1_o == NULL) break;
-        *p_sh1_o = '\0';
-        coname = mb2ts(p_h1_c);
+        const char *keyword = "<meta property=\"og:title\" content=\"";
+
+        char *p_str = strstr(htmlbody, keyword);
+        if(p_str == NULL) break;
+        p_str += strlen(keyword);
+        char *p_end = strstr(p_str, "\">");
+        if(p_end == NULL) break;
+        *p_end = '\0';
+        coname = mb2ts(p_str);
+
+        trim_leadws(coname);
+        trim_trailws(coname);
+
+        int loc = coname.rfind(_T("-ニコニコミュニティ"));
+        if(loc == string::npos) break;
+        coname.replace(loc, coname.size(), _T(""));
+
         htmldecode(coname);
         flag = true;
     } while(0);
@@ -591,14 +620,9 @@ int nicoalert_getconame(tstring &coid, tstring &coname){
         *p_te = '\0';
         coname = mb2ts(p_ts);
 
-        unsigned int i = 0;
-        while(i < coname.size()){
-            if(coname[i] == '\r' || coname[i] == '\n'){
-                coname.replace(i, 1, _T(""));
-            } else {
-                i++;
-            }
-        }
+        trim_leadws(coname);
+        trim_trailws(coname);
+
         int loc = coname.rfind(_T("-ニコニコミュニティ"));
         if(loc == string::npos) break;
         coname.replace(loc, coname.size(), _T(""));
@@ -981,7 +1005,10 @@ static int nicoalert_cmm(void){
                 continue;
             }
 
+            _DEBUGDO(DEBUG_cmm_check_strcnt++);
             ret = recv(s, respdata + respdatalen, sizeof(respdata)-respdatalen, 0);
+            _DEBUGDO(DEBUG_cmm_check_endcnt++);
+
             if(ret < 0) break;
             if(ret == 0){
                 _dbg(_T("コネクション正常切断\n"));
@@ -992,6 +1019,7 @@ static int nicoalert_cmm(void){
 
             respdatalen += ret;
 
+            _DEBUGDO(DEBUG_cmm_check_strcnt++);
             while(1){
                 unsigned int i;
                 for(i = 0; i < respdatalen; i++){
@@ -999,10 +1027,18 @@ static int nicoalert_cmm(void){
                 }
                 if(i == respdatalen) break;
                 int movelen = i + 1;
-
+#ifdef _DEBUG
+                tstring s = mb2ts(respdata);
+#endif
                 c_alertinfo ai;
                 // alertinfo APIのXML解析
                 xml_alertinfo(respdata, &ai);
+
+#ifdef _DEBUG
+                if(ai.infotype != INFOTYPE_USER){
+                    _dbg(_T("%s\n"), s.c_str());
+                }
+#endif
 
                 if(callback_alertinfo){
                     callback_alertinfo(&ai);
@@ -1011,6 +1047,7 @@ static int nicoalert_cmm(void){
                 memmove(respdata, respdata + movelen, respdatalen - movelen);
                 respdatalen -= movelen;
             }
+            _DEBUGDO(DEBUG_cmm_check_endcnt++);
         }
 
         // 正常終了時の切断
@@ -1253,5 +1290,22 @@ bool cmm_exit(void){
         waitcount--;
     }
     WSACleanup();
+    return true;
+}
+
+bool cmm_check(void){
+#ifdef _DEBUG
+    if(DEBUG_cmm_check_strcnt != DEBUG_cmm_check_endcnt){
+        if(DEBUG_cmm_check_strcnt == DEBUG_cmm_check_cnkcnt){
+            DEBUG_cmm_check_errcnt++;
+        }
+        DEBUG_cmm_check_cnkcnt = DEBUG_cmm_check_strcnt;
+    } else {
+        DEBUG_cmm_check_errcnt = 0;
+    }
+    if(DEBUG_cmm_check_errcnt >= 3){
+        return false;
+    }
+#endif
     return true;
 }

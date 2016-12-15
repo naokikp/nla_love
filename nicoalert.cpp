@@ -61,6 +61,16 @@ string ts2mb(tstring &tstr){
     return str;
 }
 
+// •¶š—ñæ“ª‚Ì‹ó”’•¶š‚ğœ‹
+void trim_leadws(tstring &s){
+    while(!s.empty()){
+        TCHAR c = s[0];
+        if(c == ' ' || c == '\r' || c == '\n' || c == '\t'){
+            s.erase(s.begin());
+        } else break;
+    }
+}
+
 // •¶š—ñ––”ö‚Ì‹ó”’•¶š‚ğœ‹
 void trim_trailws(tstring &s){
     while(!s.empty()){
